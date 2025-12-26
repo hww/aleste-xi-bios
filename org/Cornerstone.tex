@@ -1,0 +1,818 @@
+% Created 2025-12-26 Пт 21:59
+% Intended LaTeX compiler: xelatex
+\documentclass[11pt,a4paper]{scrartcl}
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\setmainlanguage{russian}
+\setotherlanguage{english}
+
+% Настройка шрифтов с ПРЯМЫМ указанием скрипта для кириллицы
+\setmainfont{Linux Libertine O}[Script=Cyrillic, Numbers={Proportional,OldStyle}]
+\setsansfont{Linux Biolinum O}[Script=Cyrillic]
+\setmonofont{JetBrains Mono}[Script=Cyrillic, Scale=0.9]
+
+% Переопределяем стандартные семейства для polyglossia
+\newfontfamily\russianfont{Linux Libertine O}[Script=Cyrillic]
+\newfontfamily\russianfonttt{JetBrains Mono}[Script=Cyrillic, Scale=0.9]
+\newfontfamily\russianfontsf{Linux Biolinum O}[Script=Cyrillic]
+
+\usepackage{csquotes}
+\usepackage{booktabs}
+\usepackage[backend=biber]{biblatex}
+
+
+\lstset{
+    basicstyle=\ttfamily\small\color[gray]{0.1}, 
+    keywordstyle=\bfseries\color{black},
+    commentstyle=\itshape\color[gray]{0.45},
+    stringstyle=\ttfamily,
+    showstringspaces=false,
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    frame=lines,
+    framerule=0.4pt,
+    framesep=6pt,
+    xleftmargin=10pt
+}
+
+\usepackage{microtype}
+\KOMAoptions{DIV=11}
+\usepackage[unicode=true,colorlinks=true,allcolors=black]{hyperref}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\addbibresource{/home/valery/org/refs.bib}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Termes}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{a4paper,left=30mm,right=20mm,top=25mm,bottom=25mm}
+\linespread{1.1}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+\usepackage{tabularx}
+\author{h2w}
+\date{\today}
+\title{Архитектура BIOS Aleste\\\medskip
+\large Дизайн для реального железа}
+\hypersetup{
+ pdfauthor={h2w},
+ pdftitle={Архитектура BIOS Aleste},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={Russian}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Архитектура BIOS Aleste: Дизайн для реального железа}
+\label{sec:org5fc15f3}
+
+\textbf{Введение: Зачем нам нужен новый стандарт?}
+
+Когда пишешь код для Z80 на реальном железе вроде Aleste, каждая инструкция на счету. Существующие стандарты часто приходят с больших платформ и не учитывают специфику 8-битных систем. Мы создаем не абстракцию ради абстракции, а практичную систему, где:
+
+\begin{itemize}
+\item Прямой вызов драйвера стоит ровно 17 тактов
+\item Переключение банков памяти происходит только когда действительно нужно
+\item Обработчик прерываний аудио не тратит время на сохранение регистров, которые не использует
+\end{itemize}
+
+Этот документ — не просто спецификация. Это философия разработки для ограниченных ресурсов.
+\subsection{Философия: Скорость через предсказуемость}
+\label{sec:org691ac27}
+
+\begin{enumerate}
+\item Фиксированные слоты вместо поиска
+\label{sec:org34f2f5c}
+
+Представьте, что вам нужно вывести пиксель на экран. В сложных системах вы бы:
+
+\begin{enumerate}
+\item Искали драйвер видео в таблице
+\item Запрашивали функцию вывода
+\item Вызывали её через указатель
+\end{enumerate}
+
+В нашей системе вы просто пишете:
+
+\begin{lstlisting}[language=asm,numbers=none]
+call 0xFD03  ; video_draw_pixel
+\end{lstlisting}
+
+\textbf{Почему это важно:} 17 тактов против 50+. При частоте кадров 50 Гц у вас есть всего 20 мс на кадр. Каждая экономия тактов — это возможность добавить больше спрайтов, больше эффектов.
+\item Реальные цифры:
+\label{sec:orga35c2a0}
+
+\begin{itemize}
+\item Стандартный вызов через фиксированный слот: \textbf{17 тактов}
+\item Вызов через таблицу указателей: \textasciitilde{}50 тактов
+\item Динамический поиск в runtime: 100+ тактов
+\end{itemize}
+\end{enumerate}
+\subsection{Структура драйвера: Один файл — одно устройство}
+\label{sec:org3ebcc87}
+
+Мы отказались от разделения на `\_api.asm` и `\_impl.asm`. Почему?
+
+\textbf{Проблема:} Когда драйвер раскидан по нескольким файлам:
+
+\begin{enumerate}
+\item Ты открываешь `video\_api.asm`, видишь прототипы
+\item Переходишь в `video\_impl.asm`, ищешь реализацию
+\item Забываешь, где лежат данные драйвера
+\end{enumerate}
+
+\textbf{Наше решение:} Открой `drivers/video/crtc.asm` — и увидишь всё:
+
+\begin{lstlisting}[language=asm,numbers=none]
+; В начале файла — таблица переходов
+SECTION DRV_VTABLE
+    ; луче устанавливать allign.
+    allign 32
+crtc_vtable:
+    jp crtc_detect
+    jp crtc_install
+    ...
+
+; Прямо здесь же — данные драйвера  
+SECTION DRV_DATA
+crtc_mode: db 0
+crtc_buffer: ds 256
+
+; И сразу код
+SECTION DRV_CODE
+crtc_detect:
+    ; проверка наличия CRTC
+    ...
+\end{lstlisting}
+
+\textbf{Результат:} Локальность. Меньше прыжков по файлам, меньше ошибок.
+\subsection{Полиморфные драйверы в BIOS Aleste: Два паттерна использования VTable}
+\label{sec:org00e07db}
+
+В системе существуют два типа драйверов с разными схемами использования VTable:
+\begin{enumerate}
+\item Синглтон-драйверы (статичные, неделимые)
+\label{sec:orgfe3b9a9}
+
+Это драйверы для уникального железа, которое не имеет альтернатив:
+\begin{itemize}
+\item \textbf{MMU} - только один тип маппера в системе
+\item \textbf{CRTC} - конкретный видеоконтроллер
+\item \textbf{PSG} - конкретный звуковой чип
+\end{itemize}
+
+\textbf{Структура:}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Единая таблица переходов
+PUBLIC _mmu_vtable, _mmu_detect, _mmu_install
+
+_mmu_vtable:
+_mmu_detect:    jp mmu_detect_impl
+_mmu_install:   jp mmu_install_impl
+\end{lstlisting}
+
+\textbf{\textbf{Использование:}}
+
+\begin{itemize}
+\item В заголовочном файле: прямые вызовы по именам меток
+\item В коде: `call \_mmu\_install`
+\item VTable используется только системой при загрузке
+\end{itemize}
+\item Полиморфные драйверы (многорежимные, заменяемые)
+\label{sec:orgac527eb}
+
+Это драйверы, имеющие несколько реализаций для одного интерфейса:
+\begin{itemize}
+\item \textbf{Видео} - разные видеорежимы (текст, графика)
+\item \textbf{Консоль} - разные кодировки или шрифты
+\item \textbf{Файловая система} - FAT12, FAT16, TR-DOS
+\end{itemize}
+\begin{enumerate}
+\item Структура:
+\label{sec:org1cde18c}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Полиморфная таблица верхнего уровня
+PUBLIC _video_vtable, _video_draw_char, _video_set_mode
+
+_video_vtable:
+_video_draw_char:    jp 0          ; Заполняется при активации
+_video_set_mode:     jp 0          ; Заполняется при активации
+
+; Конкретная реализация (например, текстовый режим)
+PUBLIC _text_vtable
+_text_vtable:
+    jp text_draw_char_impl
+    jp text_set_mode_impl
+\end{lstlisting}
+\item Процесс активации:
+\label{sec:org5079a7e}
+
+Конкретная реализация может иметь или не иметь метки, так как чаще всего будет использованп полиморфная таблица. Для этого, когда драйверу устанавливается режим он копирует конкретную таблицу в полиморфную версию.
+
+
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Система копирует таблицу конкретного драйвера в слот
+copy_driver_table:
+    ; HL = source (_text_vtable)
+    ; DE = destination (_video_vtable)
+    ld bc, 15        ; 5 методов × 3 байта
+    ldir
+\end{lstlisting}
+
+\textbf{Использование:}
+\item Ключевые отличия:
+\label{sec:orgc5faf6c}
+
+\begin{itemize}
+\item В заголовочном файле: всё те же прямые вызовы `call \_video\_draw\_char`
+\item Runtime: вызов автоматически идет в текущую активную реализацию
+\item Переключение: копирование VTable без изменения вызывающего кода
+\end{itemize}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{|X|X|X|}
+Аспект & Синглтон-драйвер & Полиморфный драйвер\\
+\hline
+\textbf{Количество реализаций} & 1 & Много\\
+\textbf{VTable в памяти} & Фиксированная, никогда не меняется & Меняется при переключении режима\\
+\textbf{Вызов из кода} & Прямой переход по фиксированному адресу & Прямой переход по адресу, который меняет реализацию\\
+\textbf{Заголовочный файл} & Содержит фиксированные адреса методов & Содержит адреса полиморфного слота\\
+\textbf{Примеры} & MMU, таймер, PSG & Видео, консоль, FS\\
+\end{tabularx}
+\end{center}
+\item Философия:
+\label{sec:org8392665}
+
+\begin{enumerate}
+\item \textbf{Единый интерфейс вызова} - код приложения всегда вызывает `\_video\_draw\_char`, независимо от режима
+\item \textbf{Нулевые накладные расходы} - вызов всегда 17 тактов, даже при полиморфизме
+\item \textbf{Простота переключения} - сменить драйвер = скопировать 15 байт
+\item \textbf{Прозрачность} - отладчик видит прямой jump, а не косвенный вызов через регистр
+\end{enumerate}
+
+\textbf{\textbf{Именно поэтому в документации говорится {}<<прямой вызов драйвера стоит ровно 17 тактов>>{}}} - потому что даже полиморфный вызов это прямой `jp` на конкретный адрес, просто этот адрес может меняться в runtime.
+
+Полиморфизм достигается не через таблицы указателей в памяти (что давало бы +50 тактов), а через физическое копирование инструкций перехода. Это гениально просто для Z80.
+\end{enumerate}
+\end{enumerate}
+\subsection{Table API: Минимум обязательного, максимум возможного}
+\label{sec:orgddb65a5}
+
+\begin{enumerate}
+\item Обязательные методы (первые 15 байт)
+\label{sec:orgf4070ef}
+
+Каждый драйвер обязан реализовать 5 методов:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{|X|X|X|}
+Метод & Что делает & Когда вызывается\\
+\hline
+`detect` & Проверяет, присутствует ли устройство & При загрузке и (опционально) периодически\\
+`install` & Инициализирует устройство & После успешного detect\\
+`get\_info` & Возвращает информацию о драйвере & По запросу системы или приложения\\
+`command` & Универсальная точка расширения & Когда нужно специфичное действие\\
+`uninstall` & Освобождает ресурсы & При выгрузке драйвера\\
+\end{tabularx}
+\end{center}
+\item Магия команды `command`
+\label{sec:org5ce7cb6}
+
+Вместо того чтобы расширять таблицу прыжков для каждой новой функции:
+
+\begin{lstlisting}[language=asm,numbers=none]
+; ПЛОХО: Таблица раздувается
+jp video_set_mode
+jp video_set_palette  
+jp video_set_sprite
+jp video_scroll
+... и ещё 20 функций
+
+; ХОРОШО: Один метод на всё
+jp video_command
+\end{lstlisting}
+
+\textbf{Как это работает:}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Установить видеорежим
+ld a, CMD_VID_SET_MODE
+ld hl, MODE_256x192
+call 0xFD00  ; video_command
+
+; Прокрутить экран
+ld a, CMD_VID_SCROLL  
+ld bc, 10  ; на 10 пикселей
+call 0xFD00
+\end{lstlisting}
+
+\textbf{Преимущество:} Таблица прыжков всегда занимает 15 байт + специфичные методы. Не нужно резервировать слоты под функции, которые драйвер не поддерживает.
+\end{enumerate}
+\subsection{Типизация команд: Избегаем хаоса}
+\label{sec:orgadad53b}
+
+\begin{enumerate}
+\item Диапазоны команд
+\label{sec:org051108f}
+
+Чтобы команды разных драйверов не конфликтовали:
+
+\begin{lstlisting}[language=asm,numbers=none]
+0x00-0x0F: Системные (все драйверы)
+  0x00 = RESET
+  0x01 = STATUS
+  0x02 = SUSPEND
+  0x03 = RESUME
+
+0x10-0x1F: Видео
+  0x10 = SET_MODE
+  0x11 = SET_PALETTE
+  0x12 = SCROLL
+
+0x20-0x2F: Аудио  
+  0x20 = PLAY
+  0x21 = STOP
+  0x22 = SET_VOLUME
+
+0x30-0x3F: Хранилище
+  0x30 = READ_SECTOR
+  0x31 = WRITE_SECTOR
+\end{lstlisting}
+
+\textbf{Пример использования:}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Играть музыку
+ld a, CMD_AUD_PLAY  ; 0x20
+ld hl, song_data
+call 0xFD00  ; audio_command
+
+; Остановить
+ld a, CMD_AUD_STOP  ; 0x21
+call 0xFD00
+\end{lstlisting}
+\end{enumerate}
+\subsection{Информация о драйвере: Система должна знать, с кем имеет дело}
+\label{sec:org388ba33}
+
+\begin{enumerate}
+\item Структура DRIVER\_INFO
+\label{sec:orgcdb950e}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Что возвращает get_info
+driver_info:
+  dw .name        ; "YM2149 Audio Driver"
+  db 2, 1         ; Версия 2.1
+  dw API_HAS_IRQ | API_STATIC_DEVICE  ; Флаги
+  db IRQ_VECTOR   ; Номер вектора прерывания (если нужно)
+  db 0            ; Резерв
+.name:
+  db "YM2149 v2.1", 0
+\end{lstlisting}
+\item Флаги возможностей:
+\label{sec:orgc1cdc88}
+
+\begin{lstlisting}[language=asm,numbers=none]
+API_HAoS_IRQ        equ 1 << 0  ; Использует прерывания
+API_STATIC_DEVICE  equ 1 << 1  ; Не исчезнет (встроенное устройство)
+API_USES_DMA       equ 1 << 2  ; Требует DMA
+API_BANKED         equ 1 << 3  ; Работает с банковой памятью
+API_POWER_SAVE     equ 1 << 4  ; Поддерживает энергосбережение
+\end{lstlisting}
+
+\textbf{Зачем это нужно:} Система видит флаг `API\_STATIC\_DEVICE` и понимает — этот видеоконтроллер встроенный, не нужно опрашивать его каждые 100 мс на предмет {}<<не исчез ли он>>{}.
+\end{enumerate}
+\subsection{Горячее обнаружение: Для тех, кто может исчезнуть}
+\label{sec:org9ce0c94}
+
+\begin{enumerate}
+\item Два типа устройств
+\label{sec:org273910b}
+
+\begin{enumerate}
+\item \textbf{Статические} (встроенные): Видеоконтроллер, системный таймер
+\begin{itemize}
+\item `detect` вызывается один раз при загрузке
+\item Флаг `API\_STATIC\_DEVICE` установлен
+\end{itemize}
+
+\item \textbf{Динамические} (сменные): Картриджи, внешние устройства
+\begin{itemize}
+\item `detect` может вызываться периодически
+\item Система отслеживает их наличие
+\end{itemize}
+\end{enumerate}
+\item Протокол обнаружения исчезновения
+\label{sec:org3f8233c}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Псевдокод ядра
+check_hotplug:
+    ; Для каждого динамического устройства
+    call driver_detect
+    jr z, .device_present
+    
+    ; Устройство исчезло!
+    call driver_uninstall
+    mark_slot_free
+    
+.device_present:
+    ; Всё на месте
+    ret
+\end{lstlisting}
+
+\textbf{Важный момент:} `uninstall` должен быть идемпотентным. Если вызвать его дважды — ничего страшного не случится.
+\end{enumerate}
+\subsection{Прерывания: Быстро или безопасно — выбор разработчика}
+\label{sec:org85a2672}
+
+\begin{enumerate}
+\item Проблема стандартных обработчиков
+\label{sec:org17f18bb}
+
+Типичный обработчик сохраняет ВСЕ регистры:
+
+\begin{lstlisting}[language=asm,numbers=none]
+irq_handler:
+    push af
+    push bc
+    push de
+    ...
+    ; 100+ тактов только на push/pop!
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret
+\end{lstlisting}
+
+Для аудиодрайвера, который должен обновлять буфер каждые 20 мс, это неприемлемо.
+\item Наше решение: Гибкость
+\label{sec:orgedc3a68}
+
+Драйвер регистрирует обработчик как есть. Если он написан на ассемблере и знает, какие регистры использует:
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Быстрый обработчик для YM2149
+ym_irq_handler:
+    push af
+    push hl
+    
+    ; Обновляем только регистры YM
+    ld hl, ym_buffer
+    ld a, (hl)
+    out (YM_PORT), a
+    
+    pop hl
+    pop af
+    ei
+    ret
+\end{lstlisting}
+
+\textbf{Но предупреждение:} Если обработчик написан на C или использует библиотечные функции — он ДОЛЖЕН сохранять все регистры. Система доверяет разработчику.
+\item 7.3 Регистрация обработчика
+\label{sec:org2f6f7d3}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; В install драйвера:
+ld a, CMD_SYS_IRQ_ATTACH
+ld hl, ym_irq_handler
+ld bc, IRQ_VECTOR
+call SYS_CALL  ; зарегистрировать
+\end{lstlisting}
+\end{enumerate}
+\subsection{Зависимости: Явное лучше неявного}
+\label{sec:orga188e32}
+
+\begin{enumerate}
+\item Декларация зависимостей
+\label{sec:orgb168168}
+
+В начале файла драйвера:
+
+\begin{lstlisting}[language=asm,numbers=none]
+; drivers/console/text.asm
+DEPENDS_ON:
+    db "VIDEO", 0    ; Нужно для вывода
+    db "KEYBOARD", 0 ; Нужно для ввода
+    db 0             ; Конец списка
+\end{lstlisting}
+\item Что происходит при загрузке
+\label{sec:orgf3172a6}
+
+\begin{enumerate}
+\item Система читает `DEPENDS\_ON` каждого драйвера
+\item Проверяет, все ли зависимости доступны
+\item Если нет — выводит понятную ошибку:
+
+\begin{verbatim}
+   CONSOLE: Missing dependency: KEYBOARD
+\end{verbatim}
+\end{enumerate}
+
+\textbf{Преимущество:} Не нужно в runtime проверять {}<<а подключена ли клавиатура?>>{}. Система знает это заранее.
+\end{enumerate}
+\subsection{Контекст памяти: Lazy switching}
+\label{sec:orgb258a72}
+
+\begin{enumerate}
+\item Проблема банковой памяти
+\label{sec:orga1951b5}
+
+На Z80 с MMU переключение банков — дорого:
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Сохранить текущую конфигурацию
+ld a, (current_bank)
+push af
+
+; Переключить на банк драйвера
+ld a, DRIVER_BANK
+out (MMU_PORT), a
+
+; Выполнить операцию
+call driver_function
+
+; Восстановить
+pop af
+out (MMU_PORT), a
+\end{lstlisting}
+
+\textasciitilde{}50 такстов на переключение туда-обратно!
+\item Наше решение: Кэширование
+\label{sec:org2a45bac}
+
+Каждый драйвер хранит свой {}<<отпечаток пальца>>{}:
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Memory Map драйвера
+crtc_mem_map:
+    db 0xA3        ; Хэш конфигурации
+    db 5, 6, 7, 8  ; Банки для окон
+\end{lstlisting}
+
+Перед вызовом драйвера:
+
+\begin{lstlisting}[language=asm,numbers=none]
+require_memory:
+    ; Сравнить хэш текущей конфигурации с хэшем драйвера
+    ld a, (current_hash)
+    cp (hl)  ; HL указывает на crtc_mem_map
+    ret z    ; Уже правильная конфигурация!
+    
+    ; Переключить банки
+    inc hl
+    ld bc, MMU_PORT
+    outi outi outi outi
+    
+    ; Обновить хэш
+    ld (current_hash), a
+    ret
+\end{lstlisting}
+
+\textbf{Результат:} Если два вызова идут к одному драйверу подряд — переключение произойдет только при первом вызове.
+\end{enumerate}
+\subsection{Соглашения о регистрах: Естественность для Z80}
+\label{sec:org6e3ccc3}
+
+\begin{enumerate}
+\item Передача параметров
+\label{sec:org0990e49}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; HL, DE, BC — в порядке приоритета
+ld hl, buffer    ; Основной параметр
+ld bc, 256       ; Дополнительный
+call video_fill
+
+; Иногда только A
+ld a, COLOR_RED
+call video_set_color
+\end{lstlisting}
+\item Возврат результата и ошибок
+\label{sec:orgd4c617c}
+
+\textbf{Гениальность в простоте:}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; Успех: A=0, Carry сброшен
+xor a  ; A=0, Carry=0
+ret
+
+; Ошибка: A=код, Carry установлен
+ld a, ERR_TIMEOUT
+scf    ; Set Carry Flag
+ret
+\end{lstlisting}
+
+\textbf{Почему это удобно:}
+
+\begin{lstlisting}[language=asm,numbers=none]
+call disk_read
+ret c           ; Выход при ошибке
+; Продолжаем если OK
+
+; Или цепочка вызовов:
+call init_video
+call c, .error
+call init_audio  
+call c, .error
+call init_input
+call c, .error
+\end{lstlisting}
+
+\textbf{Стандартные коды ошибок:}
+
+\begin{lstlisting}[language=asm,numbers=none]
+ERR_SUCCESS      equ 0
+ERR_NOT_SUPPORTED equ 1
+ERR_TIMEOUT      equ 4
+ERR_NO_DEVICE    equ 11   ; Устройство отсутствует
+\end{lstlisting}
+\end{enumerate}
+\subsection{Пример из реальной жизни: Аудиодрайвер для YM2149}
+\label{sec:org7a683d1}
+
+\begin{lstlisting}[language=asm,numbers=none]
+; ===================================================================
+; Драйвер звукового чипа YM2149
+; ===================================================================
+
+SECTION DRV_VTABLE
+ym2149_vtable:
+    jp ym_detect      ; +0
+    jp ym_install     ; +3
+    jp ym_get_info    ; +6
+    jp ym_command     ; +9
+    jp ym_uninstall   ; +12
+    jp ym_play_note   ; +15 (специфичный метод)
+
+; -------------------------------------------------------------------
+; Зависимости: нет, самостоятельное устройство
+; -------------------------------------------------------------------
+DEPENDS_ON:
+    db 0
+
+; -------------------------------------------------------------------
+; Данные
+; -------------------------------------------------------------------
+SECTION DRV_DATA
+
+ym_mem_map:
+    db 0xC1        ; Хэш конфигурации
+    db 2, 3, 4, 5  ; Банки памяти
+
+ym_info:
+    dw .name
+    db 1, 2        ; Версия 1.2
+    dw API_HAS_IRQ | API_STATIC_DEVICE
+    db 0x38        ; Вектор прерывания
+.name:
+    db "YM2149 PSG v1.2", 0
+
+; -------------------------------------------------------------------
+; Код драйвера
+; -------------------------------------------------------------------
+SECTION DRV_CODE
+
+ym_detect:
+    ; Проверяем наличие YM2149
+    call require_memory
+    
+    ; Пробуем записать/считать тестовое значение
+    ld a, 0xFF
+    out (YM_REG), a
+    in a, (YM_REG)
+    cp 0xFF
+    jr nz, .not_found
+    
+    ; Устройство найдено
+    ld a, 1
+    ret
+    
+.not_found:
+    xor a
+    ret
+
+ym_command:
+    ; Обработка команд IOCTL
+    cp CMD_RESET
+    jr z, .reset
+    cp CMD_AUD_PLAY
+    jr z, .play_cmd
+    cp CMD_AUD_STOP
+    jr z, .stop_cmd
+    
+    ; Неизвестная команда
+    ld a, ERR_NOT_SUPPORTED
+    scf
+    ret
+
+.reset:
+    ; Сброс звукового чипа
+    xor a
+    ld bc, 13
+    ld hl, ym_registers
+.reset_loop:
+    out (c), a
+    inc c
+    djnz .reset_loop
+    xor a
+    ret
+
+.play_cmd:
+    ; HL = данные ноты
+    ld a, (hl)
+    out (YM_FREQ_A), a
+    inc hl
+    ld a, (hl)
+    out (YM_FREQ_A_HI), a
+    xor a
+    ret
+
+; Быстрый обработчик прерываний
+; Сохраняет только то, что использует
+ym_irq_handler:
+    push af
+    push hl
+    
+    ; Обновляем частоты
+    ld hl, (ym_freq_ptr)
+    ld a, (hl)
+    out (YM_FREQ_A), a
+    
+    ; Следующий байт
+    inc hl
+    ld (ym_freq_ptr), hl
+    
+    pop hl
+    pop af
+    ei
+    ret
+\end{lstlisting}
+\subsection{Структура проекта: Как это всё собирается}
+\label{sec:orga64a246}
+
+\begin{lstlisting}[language=bash,numbers=none]
+project/
+ ├── core/
+ │   ├── kernel.asm       * 1000 строк: планировщик, IRQ
+ │   ├── memory.asm       * 500 строк: require_memory, банки
+ │   └── loader.asm       * 300 строк: загрузка драйверов
+ ├── drivers/
+ │   ├── video/crtc.asm   * 1500 строк: весь драйвер CRTC
+ │   ├── audio/ym2149.asm * 800 строк: весь драйвер YM2149
+ │   └── input/kbd.asm    * 600 строк: вся клавиатура
+ ├── services/
+ │   ├── fs/fat16.asm     * Файловая система
+ │   └── console/text.asm * Текстовый вывод
+ └── build/
+     └── memmap.cfg       * Кто где живёт
+\end{lstlisting}
+
+\textbf{Конфигурация memmap.cfg:}
+
+\begin{lstlisting}[language=bash,numbers=none]
+# Фиксированные слоты
+0xFD00: drivers/audio/
+0xFD20: drivers/video/  
+0xFD40: drivers/input/
+0xFD60: services/fs/
+\end{lstlisting}
+
+\textbf{Заключение: Что мы получили}
+
+Мы создали систему, которая:
+
+\begin{enumerate}
+\item \textbf{Быстрая} — фиксированные адреса, lazy MMU, гибкие обработчики IRQ
+\item \textbf{Гибкая} — IOCTL через `command`, диапазоны команд
+\item \textbf{Надёжная} — явные зависимости, hot-detect для сменных устройств
+\item \textbf{Простая} — один файл на драйвер, понятные соглашения
+\end{enumerate}
+
+Это не академический стандарт. Это набор практик, выстраданных на реальном железе, где каждый такт на счету, а память измеряется килобайтами.
+
+Код, написанный по этому стандарту, будет работать на Aleste через 30 лет — потому что он основан на простых, проверенных временем принципах, а не на модных абстракциях.
+\end{document}

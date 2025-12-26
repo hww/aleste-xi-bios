@@ -1,0 +1,16 @@
+\xpg@aux {}{russian}
+\contentsline {section}{\numberline {1}Архитектура BIOS Aleste: Дизайн для реального железа}{1}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Философия: Скорость через предсказуемость}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Структура драйвера: Один файл — одно устройство}{2}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Полиморфные драйверы в BIOS Aleste: Два паттерна использования VTable}{3}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Table API: Минимум обязательного, максимум возможного}{4}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}Типизация команд: Избегаем хаоса}{5}{subsection.1.5}%
+\contentsline {subsection}{\numberline {1.6}Информация о драйвере: Система должна знать, с кем имеет дело}{6}{subsection.1.6}%
+\contentsline {subsection}{\numberline {1.7}Горячее обнаружение: Для тех, кто может исчезнуть}{6}{subsection.1.7}%
+\contentsline {subsection}{\numberline {1.8}Прерывания: Быстро или безопасно — выбор разработчика}{7}{subsection.1.8}%
+\contentsline {subsection}{\numberline {1.9}Зависимости: Явное лучше неявного}{8}{subsection.1.9}%
+\contentsline {subsection}{\numberline {1.10}Контекст памяти: Lazy switching}{9}{subsection.1.10}%
+\contentsline {subsection}{\numberline {1.11}Соглашения о регистрах: Естественность для Z80}{9}{subsection.1.11}%
+\contentsline {subsection}{\numberline {1.12}Пример из реальной жизни: Аудиодрайвер для YM2149}{10}{subsection.1.12}%
+\contentsline {subsection}{\numberline {1.13}Структура проекта: Как это всё собирается}{13}{subsection.1.13}%
+\providecommand \tocbasic@end@toc@file {}\tocbasic@end@toc@file 

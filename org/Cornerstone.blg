@@ -1,0 +1,9 @@
+[0] Config.pm:328> INFO - This is Biber 2.21
+[0] Config.pm:331> INFO - Logfile is 'Cornerstone.blg'
+[65] biber:342> INFO - === Пт дек 26, 2025, 21:59:53
+[78] Biber.pm:421> INFO - Reading 'Cornerstone.bcf'
+[149] Biber.pm:1002> INFO - Found 0 citekeys in bib section 0
+[165] bbl.pm:676> INFO - Writing 'Cornerstone.bbl' with encoding 'UTF-8'
+[165] bbl.pm:779> INFO - Output to Cornerstone.bbl
+[166] Biber.pm:132> WARN - The file 'Cornerstone.bcf' does not contain any citations!
+[166] Biber.pm:134> INFO - WARNINGS: 1
