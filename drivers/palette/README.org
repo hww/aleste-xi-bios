@@ -1,0 +1,72 @@
+* Palette Examples
+
+
+** Пример 1: Базовая инициализация
+
+#+BEGIN_SRC c 
+#include <aleste_palette.h>
+
+// Пример 1: Базовая инициализация
+void init_palette_basic(void) {
+    // Выбрать нативный драйвер
+    palette_select_driver(PALETTE_DRV_NATIVE);
+    
+    // Установить режим 15-бит
+    palette_set_mode(PAL_MODE_15BIT);
+    
+    // Установить несколько цветов
+    palette_rgb_t colors[3] = {
+        {31, 0, 0},    // Красный
+        {0, 31, 0},    // Зеленый
+        {0, 0, 31}     // Синий
+    };
+    
+    for (int i = 0; i < 3; i++) {
+        palette_set_color_rgb(i, &colors[i]);
+    }
+    
+    // Установить синий бордюр
+    PAL_SET_BORDER(0, 0, 31);
+}
+#+END_SRC
+
+** Пример 2: Использование быстрых inline-функций
+
+#+BEGIN_SRC c 
+// Пример 2: Использование быстрых inline-функций
+void init_palette_fast(void) {
+    // Выбор драйвера через макрос
+    PALETTE_USE_DRIVER(PALETTE_DRV_NATIVE);
+    
+    // Быстрая установка цветов через inline-ассемблер
+    pal_set_color_fast(0, PAL_RGB15(31, 0, 0));   // Красный
+    pal_set_color_fast(1, PAL_RGB15(0, 31, 0));   // Зеленый
+    pal_set_color_fast(2, PAL_RGB15(0, 0, 31));   // Синий
+    
+    // Быстрая установка бордюра
+    pal_set_border_fast(PAL_RGB15(16, 16, 16));   // Серый
+}
+
+#+END_SRC
+
+** Пример 3: Работа с градиентной палитрой
+
+#+BEGIN_SRC c 
+// Пример 3: Работа с градиентной палитрой
+void init_gradient_palette(void) {
+    uint16_t gradient[256];
+    
+    // Создать градиент от синего к красному
+    palette_create_gradient(
+        PAL_RGB15(0, 0, 31),    // Начальный: синий
+        PAL_RGB15(31, 0, 0),    // Конечный: красный
+        gradient
+    );
+    
+    // Загрузить палитру
+    palette_load(gradient, 0, 256);
+    
+    // Применить эффект сепии
+    palette_set_modifier(PAL_MOD_SEPIA, 0);
+}
+#+END_SRC

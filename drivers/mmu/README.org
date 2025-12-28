@@ -1,0 +1,19 @@
+* MMU Дарйвер
+
+#+BEGIN_SRC text
+drivers/mmu/
+├── mmu.asm              ← HAL: контексты для драйверов (5 байт + кэш + lock)
+│   ├── mmu_set_context  ← Основная функция драйверов
+│   ├── mmu_get_context  ← Чтение
+│   ├── mmu_map_page     ← Одиночная страница
+│   └── lock/unlock      ← Безопасность
+│
+├── mmu_manager.asm      ← Менеджер страниц для ОС/приложений
+│   ├── alloc_pages      ← Выделение
+│   ├── free_pages       ← Освобождение
+│   └── bit_map          ← Битовое поле 256 страниц
+│
+└── (будущий) mmu_task.asm ← Для многозадачности
+    ├── save_state       ← Сохранить для переключения задачи
+    └── restore_state    ← Восстановить
+#+END_SRC

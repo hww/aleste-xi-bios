@@ -6,6 +6,12 @@ include "../../inc/hardware/ports_aleste.inc"
 include "../../inc/bios/drivers.inc"
 include "../../inc/bios/errors.inc"
 
+defc MMU_CMD_RESET      = 0x00
+defc MMU_CMD_GET_TOTAL  = 0x10
+defc MMU_CMD_GET_FREE   = 0x11
+defc MMU_CMD_RESERVE    = 0x12
+defc MMU_CMD_RELEASE    = 0x13
+
 ; ===================================================================
 ; ЗАВИСИМОСТИ: нет, это базовый драйвер железа
 ; ===================================================================
@@ -13,20 +19,10 @@ DEPENDS_ON:
     db 0
 
 ; ===================================================================
-; ДИАПАЗОНЫ КОМАНД ДЛЯ MMU
-; ===================================================================
-CMD_MMU_GET_TOTAL   equ 0x10
-CMD_MMU_GET_FREE    equ 0x11
-CMD_MMU_RESERVE     equ 0x12
-CMD_MMU_RELEASE     equ 0x13
-CMD_MMU_GET_STATS   equ 0x14
-CMD_MMU_SET_MODE    equ 0x15  ; LX/EX режимы
-
-; ===================================================================
 ; ТАБЛИЦА ПЕРЕХОДОВ (15 байт + специфичные методы)
 ; ===================================================================
-PUBLIC _mmu_vtable
-PUBLIC _mmu_detect, _mmu_install, _mmu_get_info, _mmu_get_info, _mmu_command, _mmu_command, _mmu_uninstall
+PUBLIC _mmu_vtable              ;
+PUBLIC _mmu_detect, _mmu_install, _mmu_get_info, _mmu_command, _mmu_uninstall
 PUBLIC _mmu_set_context, _mmu_get_context, _mmu_map_page
 
 SECTION DRV_VTABLE
@@ -50,8 +46,6 @@ SECTION DRV_DATA
 
 ; Текущее состояние
 mmu_current_hash:   db 0xFF        ; 0xFF = неинициализировано
-mmu_total_pages:    db 256         ; Всего страниц в системе
-mmu_free_pages:     dw 0           ; Свободных страниц
 mmu_lock_count:     db 0           ; Счётчик блокировок
 
 ; Дефолтный контекст (банки 0,1,2,3)
@@ -69,11 +63,11 @@ mmu_stats:
 mmu_info:
     dw @name
     db 2, 0          ; Версия 2@0
-    dw API_STATIC_DEVICE | API_USES_DMA
+    dw API_STATIC_BIT | API_BANKED_BIT
     db 0             ; IRQ не используем
     db 0             ; резерв
 @name:
-    db "ALESTE LX MMU v2@0", 0
+    db "ALESTE LX MMU v2.0", 0
 
 ; ===================================================================
 ; КОД ДРАЙВЕРА
@@ -82,25 +76,25 @@ SECTION DRV_CODE
 
 ; -------------------------------------------------------------------
 ; mmu_detect - проверка наличия MMU
-; Out: A=1 если найден, A=0 если нет
+; Out: A=1 если найден, A=0 если нет, Carry=1 при ошибке
 ; -------------------------------------------------------------------
 mmu_detect:
     ; Сохраняем текущую страницу в окне C000-FFFF
-    in a, (0xFF)
+    in a, (MMU_PORT_BANK_3)
     push af
     
     ; Пробуем записать уникальный паттерн
     ld a, 0xA5
-    out (0xFF), a
+    out (MMU_PORT_BANK_3), a
     
     ; Проверяем, что записалось
-    in a, (0xFF)
+    in a, (MMU_PORT_BANK_3)
     cp 0xA5
     jr nz, @not_found
     
     ; Восстанавливаем оригинальную страницу
     pop af
-    out (0xFF), a
+    out (MMU_PORT_BANK_3), a
     
     ; Успех
     ld a, 1
@@ -120,9 +114,6 @@ mmu_install:
     ; Устанавливаем дефолтную конфигурацию
     ld hl, mmu_default_ctx
     call mmu_set_context
-    
-    ; Инициализируем менеджер памяти
-    call mmu_init_memory
     
     ; Сбрасываем статистику
     ld hl, 0
@@ -144,26 +135,17 @@ mmu_get_info:
 
 ; -------------------------------------------------------------------
 ; mmu_command - обработчик универсальных команд
-; In: A = код команды (см@ CMD_MMU_*)
+; In: A = код команды (см. DRIVER_CMD_* и MMU_CMD_*)
 ; -------------------------------------------------------------------
 mmu_command:
-    cp CMD_RESET
+    cp MMU_CMD_RESET
     jp z, mmu_install
     
-    cp CMD_MMU_GET_TOTAL
+    cp MMU_CMD_GET_TOTAL
     jr z, @get_total
     
-    cp CMD_MMU_GET_FREE
+    cp MMU_CMD_GET_FREE
     jr z, @get_free
-    
-    cp CMD_MMU_RESERVE
-    jr z, @reserve_pages
-    
-    cp CMD_MMU_RELEASE
-    jr z, @release_pages
-    
-    cp CMD_MMU_GET_STATS
-    jr z, @get_stats
     
     ; Неизвестная команда
     ld a, ERR_NOT_SUPPORTED
@@ -171,34 +153,14 @@ mmu_command:
     ret
 
 @get_total:
-    ; Возвращаем общее количество страниц
-    ld a, (mmu_total_pages)
-    xor a        ; A != 0, сброс carry
+    ; Возвращаем общее количество страниц (256)
+    ld hl, 256
+    xor a        ; A=0, сброс carry
     ret
 
 @get_free:
-    ; Возвращаем количество свободных страниц
-    ld hl, (mmu_free_pages)
-    xor a        ; сброс carry
-    ret
-
-@get_stats:
-    ; HL -> статистика
-    ld hl, mmu_stats
-    xor a
-    ret
-
-@reserve_pages:
-    ; A = количество страниц для резервации
-    ; Возвращает номер первой страницы в HL или ошибку
-    ; TODO: реализовать аллокатор
-    ld a, ERR_NOT_SUPPORTED
-    scf
-    ret
-
-@release_pages:
-    ; HL = номер первой страницы, BC = количество
-    ; TODO: реализовать аллокатор
+    ; TODO: реализовать, когда будет менеджер памяти
+    ld hl, 0
     xor a
     ret
 
@@ -250,10 +212,10 @@ mmu_set_context:
 @force_update:
     ; Переключаем страницы (самая быстрая последовательность)
     inc hl
-    ld a, (hl) \ out (0xFC), a \ inc hl
-    ld a, (hl) \ out (0xFD), a \ inc hl
-    ld a, (hl) \ out (0xFE), a \ inc hl
-    ld a, (hl) \ out (0xFF), a
+    ld a, (hl) \ out (MMU_PORT_BANK_0), a \ inc hl
+    ld a, (hl) \ out (MMU_PORT_BANK_1), a \ inc hl
+    ld a, (hl) \ out (MMU_PORT_BANK_2), a \ inc hl
+    ld a, (hl) \ out (MMU_PORT_BANK_3), a
     ret
 
 ; -------------------------------------------------------------------
@@ -267,31 +229,25 @@ mmu_get_context:
     inc de
     
     ; Читаем текущие страницы из портов
-    in a, (0xFC) \ ld (de), a \ inc de
-    in a, (0xFD) \ ld (de), a \ inc de
-    in a, (0xFE) \ ld (de), a \ inc de
-    in a, (0xFF) \ ld (de), a
+    in a, (MMU_PORT_BANK_0) \ ld (de), a \ inc de
+    in a, (MMU_PORT_BANK_1) \ ld (de), a \ inc de
+    in a, (MMU_PORT_BANK_2) \ ld (de), a \ inc de
+    in a, (MMU_PORT_BANK_3) \ ld (de), a
     
     xor a  ; успех
     ret
 
 ; -------------------------------------------------------------------
 ; mmu_map_page - отображение логической страницы в окно
-; In: A = окно (0-3), B = физическая страница
+; In: A = окно (0-3), B = физическая страница (0-255)
 ; -------------------------------------------------------------------
 mmu_map_page:
-    ; Проверяем валидность параметров
+    ; Проверяем номер окна
     cp 4
     jr nc, @invalid_window
     
-    ld c, a
-    ld a, b
-    cp (mmu_total_pages)
-    jr nc, @invalid_page
-    
-    ; Вычисляем адрес порта: 0xFC + окно
-    ld a, c
-    add a, 0xFC
+    ; Вычисляем адрес порта: MMU_PORT_BANK_0 + окно
+    add a, MMU_PORT_BANK_0
     ld c, a
     
     ; Обновляем кэш контекста
@@ -305,19 +261,8 @@ mmu_map_page:
     ret
 
 @invalid_window:
-@invalid_page:
     ld a, ERR_INVALID_PARAM
     scf
-    ret
-
-; -------------------------------------------------------------------
-; mmu_init_memory - инициализация менеджера памяти
-; -------------------------------------------------------------------
-mmu_init_memory:
-    ; Помечаем первые 4 страницы как занятые (система)
-    ; TODO: полная реализация битовой карты свободных страниц
-    ld hl, 256 - 4
-    ld (mmu_free_pages), hl
     ret
 
 ; -------------------------------------------------------------------
@@ -337,3 +282,4 @@ mmu_unlock:
     jp nz, $+3  ; если не ноль, не включаем прерывания
     ei
     ret
+    

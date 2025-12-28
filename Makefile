@@ -1,4 +1,10 @@
 # Проект: Aleste BIOS
+Z88DK_PATH = /home/valery/bin/z88dk
+# Добавляем их в PATH самого процесса Make
+export PATH := $(Z88DK_PATH)/bin:$(OSS_CAD_PATH)/bin:$(PATH)
+# Для z88dk обязательна эта переменная
+export ZCCCFG := $(Z88DK_PATH)/lib/config
+
 TARGET = aleste
 BUILD_DIR = build
 OUTPUT_DIR = output
@@ -23,9 +29,15 @@ CFLAGS = +z80 -vn -O3 -startup=0 -m -Iinclude -I. \
 # Исходники
 SECTIONS = asm/sections.asm
 CRT = asm/crt0_aleste.asm
-DRIVERS = drivers/mmu/mmu.asm \
+DRIVERS = \
+	bios/errors.asm \
+	bios/undefined_method.asm \
+	drivers/mmu/mmu.asm \
 	drivers/crtc/crtc.asm \
 	drivers/palette/palette.asm \
+	drivers/palette/palette_12b.asm \
+	drivers/vbuf/vbuf_16k1b.asm \
+	drivers/vbuf/vbuf.asm
 
 FONTS = fonts/font_win1252.asm
 
@@ -41,7 +53,7 @@ prepare:
 	mkdir -p $(OUTPUT_DIR)
 
 $(TARGET).bin: $(SECTIONS) $(CRT) $(DRIVERS) $(SOURCES)
-	# 1. Компиляция (уже работает)
+# 1. Компиляция (уже работает)
 	$(CC) $(CFLAGS) \
 	-o $(BUILD_DIR)/$(TARGET) \
 	$(SECTIONS) \
@@ -49,26 +61,20 @@ $(TARGET).bin: $(SECTIONS) $(CRT) $(DRIVERS) $(SOURCES)
 	$(FONTS) \
 	$(DRIVERS) \
 	$(SOURCES)
-	
-	# 1. Создаем чистую болванку 64 Кбайт (заполняем нулями)
+# 1. Создаем чистую болванку 64 Кбайт (заполняем нулями)
 	dd if=/dev/zero of=$(IMAGE) bs=1 count=65536
-	
-	# 2. CRT0 и вектора (с адреса 0x0000, хотя код начинается со 0x0100)
+
+# 2. CRT0 и вектора (с адреса 0x0000, хотя код начинается со 0x0100)
 	dd if=$(BUILD)_code_crt_start.bin of=$(IMAGE) conv=notrunc bs=1 seek=0
-	
-	# 3. Основной код BIOS (main.c и библиотеки) - адрес 0x0200
+# 3. Основной код BIOS (main.c и библиотеки) - адрес 0x0200
 	dd if=$(BUILD)_code_compiler.bin of=$(IMAGE) conv=notrunc bs=1 seek=512
-	
-	# 4. Тела драйверов (DRV_CODE) - адрес 0xC000
+# 4. Тела драйверов (DRV_CODE) - адрес 0xC000
 	dd if=$(BUILD)_DRV_CODE.bin of=$(IMAGE) conv=notrunc bs=1 seek=49152
-	
-	# 5. Ассеты (Шрифты) - адрес 0xE000
+# 5. Ассеты (Шрифты) - адрес 0xE000
 	dd if=$(BUILD)_FONT_DATA.bin of=$(IMAGE) conv=notrunc bs=1 seek=57344
-	
-	# 6. Таблица прыжков (VTABLE) - адрес 0xFD00
+# 6. Таблица прыжков (VTABLE) - адрес 0xFD00
 	dd if=$(BUILD)_DRV_VTABLE.bin of=$(IMAGE) conv=notrunc bs=1 seek=64768
-	
-	# 7. Данные драйверов (Переменные) - адрес 0xFF00
+# 7. Данные драйверов (Переменные) - адрес 0xFF00
 	dd if=$(BUILD)_DRV_DATA.bin of=$(IMAGE) conv=notrunc bs=1 seek=65280
 
 	@echo "✅ Образ $(IMAGE) успешно собран."
