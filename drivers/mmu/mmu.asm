@@ -21,28 +21,31 @@ DEPENDS_ON:
 ; ===================================================================
 ; ТАБЛИЦА ПЕРЕХОДОВ (15 байт + специфичные методы)
 ; ===================================================================
-PUBLIC _mmu_vtable              ;
-PUBLIC _mmu_detect, _mmu_install, _mmu_get_info, _mmu_command, _mmu_uninstall
-PUBLIC _mmu_set_context, _mmu_get_context, _mmu_map_page
+PUBLIC __mmu_vtable              ;
+PUBLIC __mmu_detect, __mmu_install, __mmu_get_info, __mmu_command, __mmu_uninstall
+PUBLIC __mmu_set_context, __mmu_get_context, __mmu_map_page, __mmu_lock, __mmu_unlock
 
-SECTION DRV_VTABLE
+SECTION DR__VTABLE
 align 32
 
-_mmu_vtable:
-_mmu_detect:      jp mmu_detect       ; +0  - проверка наличия
-_mmu_install:     jp mmu_install      ; +3  - инициализация
-_mmu_get_info:    jp mmu_get_info     ; +6  - информация
-_mmu_command:     jp mmu_command      ; +9  - универсальные команды
-_mmu_uninstall:   jp mmu_uninstall    ; +12 - выгрузка
+__mmu_vtable:
+__mmu_detect:      jp mmu_detect       ; +0  - проверка наличия
+__mmu_install:     jp mmu_install      ; +3  - инициализация
+__mmu_get_info:    jp mmu_get_info     ; +6  - информация
+__mmu_command:     jp mmu_command      ; +9  - универсальные команды
+__mmu_uninstall:   jp mmu_uninstall    ; +12 - выгрузка
 ; Специфичные методы MMU
-_mmu_set_context: jp mmu_set_context  ; +15 - установка контекста
-_mmu_get_context: jp mmu_get_context  ; +18 - чтение контекста
-_mmu_map_page:    jp mmu_map_page     ; +21 - отображение страницы
+__mmu_set_context: jp mmu_set_context  ; +15 - установка контекста
+__mmu_get_context: jp mmu_get_context  ; +18 - чтение контекста
+__mmu_map_page:    jp mmu_map_page     ; +21 - отображение страницы
+__mmu_lock:        jp mmu_lock
+__mmu_unlock:      jp mmu_unlock
+__mmu_vtable_end:
 
 ; ===================================================================
 ; ДАННЫЕ ДРАЙВЕРА
 ; ===================================================================
-SECTION DRV_DATA
+SECTION DR__DATA
 
 ; Текущее состояние
 mmu_current_hash:   db 0xFF        ; 0xFF = неинициализировано
@@ -72,7 +75,7 @@ mmu_info:
 ; ===================================================================
 ; КОД ДРАЙВЕРА
 ; ===================================================================
-SECTION DRV_CODE
+SECTION DR__CODE
 
 ; -------------------------------------------------------------------
 ; mmu_detect - проверка наличия MMU

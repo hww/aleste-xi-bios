@@ -6,18 +6,18 @@ extern MMU_CMD_RESERVE
 extern MMU_CMD_RELEASE   
 
 ; Методы драйвера
-extern _mmu_vtable        
-extern _mmu_detect        
-extern _mmu_install       
-extern _mmu_get_info      
-extern _mmu_command       
-extern _mmu_uninstall     
-extern _mmu_set_context   
-extern _mmu_get_context   
-extern _mmu_map_page      
+extern __mmu_vtable        
+extern __mmu_detect        
+extern __mmu_install       
+extern __mmu_get_info      
+extern __mmu_command       
+extern __mmu_uninstall     
+extern __mmu_set_context   
+extern __mmu_get_context   
+extern __mmu_map_page      
 
 ; Методы менеджера памяти
-extern _mmu_mem_init      
-extern _mmu_alloc_pages   
-extern _mmu_free_pages    
-extern _mmu_get_stats     
+extern __mmu_mem_init      
+extern __mmu_alloc_pages   
+extern __mmu_free_pages    
+extern __mmu_get_stats     

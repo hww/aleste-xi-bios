@@ -1,43 +1,41 @@
-/**
- * @file mmu_aleste.h
- * @brief MMU driver for Aleste LX computer
- * @version 2.0
- */
-
-#ifndef _MMU_H
-#define _MMU_H
+#ifndef MMU_H
+#define MMU_H
 
 #include <stdint.h>
-#include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
+// Контекст (соответствует структуре в ассемблере)
+typedef struct {
+    uint8_t hash;
+    uint8_t bank[4];
+} mmu_ctx_t;
+
+// --- Точки входа VTable (для линкера) ---
+extern void _mmu_detect;
+extern void _mmu_install;
+extern void _mmu_get_info;
+extern void _mmu_command;
+extern void _mmu_uninstall;
+extern void _mmu_set_context;
+extern void _mmu_get_context;
+extern void _mmu_map_page;
+extern void _mmu_lock; 
+extern void _mmu_unlock;
+
+// --- Публичный Си-интерфейс ---
+
+uint8_t  mmu_detect(void);
+void     mmu_install(void);
+void* mmu_get_info(void);
+uint16_t mmu_command(uint8_t cmd, uint16_t param);
+void     mmu_uninstall(void);
+
+// Специфичные методы
+void mmu_set_ctx(const mmu_ctx_t* ctx) __z88dk_fastcall __naked;
+void mmu_get_ctx(mmu_ctx_t* ctx) __z88dk_fastcall __naked;
+void mmu_map(uint8_t window, uint8_t page) __naked;
+
+// Прямое управление прерываниями внутри MMU (для критических секций)
+void mmu_lock(void);
+void mmu_unlock(void);
+
 #endif
-
-// Базовые команды MMU
-#define MMU_CMD_GET_TOTAL    0x10
-#define MMU_CMD_GET_FREE     0x11
-#define MMU_CMD_RESERVE      0x12
-#define MMU_CMD_RELEASE      0x13
-
-// Размер контекста
-#define MMU_CTX_SIZE         5
-
-// Функции драйвера
-bool mmu_detect(void);
-void mmu_install(void);
-void mmu_set_context(const uint8_t* ctx);
-void mmu_map_page(uint8_t window, uint8_t page);
-void mmu_get_context(uint8_t* buf);
-
-// Функции менеджера памяти (расширенные)
-void mmu_mem_init(void);
-uint8_t mmu_alloc_pages(uint8_t count);
-void mmu_free_pages(uint8_t first_page, uint8_t count);
-uint16_t mmu_get_free_count(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* _MMU_H */

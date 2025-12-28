@@ -20,12 +20,12 @@ extern CRTC_FLAG_BANKED_BIT
 extern CRTC_FLAG_POWER_SAVE
 
 ; Методы драйвера
-extern _crtc_vtable
-extern _crtc_detect      ; +0  - проверка наличия
-extern _crtc_install     ; +3  - инициализация
-extern _crtc_get_info    ; +6  - информация
-extern _crtc_command     ; +9  - универсальные команды
-extern _crtc_uninstall   ; +12 - выгрузка
+extern __crtc_vtable
+extern __crtc_detect      ; +0  - проверка наличия
+extern __crtc_install     ; +3  - инициализация
+extern __crtc_get_info    ; +6  - информация
+extern __crtc_command     ; +9  - универсальные команды
+extern __crtc_uninstall   ; +12 - выгрузка
 ; Специфичные методы CRTC
-extern _crtc_set_mode    ; +15 - установка видеорежима
-extern _crtc_set_view    ; +18 - установка адреса отображения
+extern __crtc_set_mode    ; +15 - установка видеорежима
+extern __crtc_set_view    ; +18 - установка адреса отображения

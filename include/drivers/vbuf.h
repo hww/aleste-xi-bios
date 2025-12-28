@@ -1,5 +1,10 @@
-#ifndef ALESTE_VBUF_H
-#define ALESTE_VBUF_H
+/* ============================================================
+ * vbuf.h - Интерфейс видеобуфера для C программ
+ * ============================================================
+ */
+
+#ifndef VBUF_H
+#define VBUF_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -8,23 +13,7 @@
 extern "C" {
 #endif
 
-/* ==================== Типы данных ==================== */
-
-/**
- * Информация о видеорежиме
- */
-typedef struct {
-    uint16_t width;          // Ширина в пикселях
-    uint16_t height;         // Высота в пикселях
-    uint8_t  bpp;            // Битов на пиксель (1, 2, 4, 8)
-    uint8_t  bytes_per_line; // Байт на строку
-    uint16_t vram_size;      // Размер VRAM в байтах
-    uint8_t  flags;          // Флаги режима
-} vbuf_mode_info_t;
-
-/**
- * Прямоугольник
- */
+/* Структуры */
 typedef struct {
     uint16_t x;
     uint16_t y;
@@ -32,246 +21,73 @@ typedef struct {
     uint16_t h;
 } vbuf_rect_t;
 
-/* ==================== Константы ==================== */
+typedef struct {
+    uint16_t width;
+    uint16_t height;
+    uint8_t bpp;
+    uint8_t bytes_per_line;
+    uint16_t vram_size;
+    uint8_t flags;
+} vbuf_mode_info_t;
 
-// Флаги видеорежима
-#define VBUF_FLAG_INTERLACED   (1 << 0)  // Чересстрочный режим
-#define VBUF_FLAG_DOUBLEBUF    (1 << 1)  // Двойная буферизация
-#define VBUF_FLAG_LINEAR       (1 << 2)  // Линейная адресация (не planar)
-
-// Коды ошибок
-#define VBUF_ERR_SUCCESS       0
-#define VBUF_ERR_NOT_FOUND     1
-#define VBUF_ERR_INVALID_MODE  2
-#define VBUF_ERR_NO_MEMORY     3
-#define VBUF_ERR_MMU_FAIL      4
-#define VBUF_ERR_NOT_SUPPORTED 5
-
-/* ==================== Системные методы ==================== */
-
-/**
- * Выбор и инициализация драйвера видеобуфера
- * @param driver_id Идентификатор драйвера (см. VBUF_DRV_*)
- * @return Код ошибки (0 = успех)
- */
-uint8_t vbuf_select_driver(uint8_t driver_id);
-
-/**
- * Получить информацию о текущем режиме
- * @return Указатель на структуру с информацией
- */
+/* Обязательные методы драйвера */
+bool vbuf_init(void);
 const vbuf_mode_info_t* vbuf_get_mode_info(void);
+bool vbuf_command(uint8_t cmd, void* param);
 
-/**
- * Выполнить команду драйвера
- * @param cmd Команда (см. VBUF_CMD_*)
- * @param param Дополнительный параметр
- * @return Результат выполнения
- */
-uint8_t vbuf_command(uint8_t cmd, uint16_t param);
-
-/* ==================== Управление буфером ==================== */
-
-/**
- * Очистить весь буфер
- * @param color Цвет заполнения (палитровый индекс или паттерн)
- */
+/* Управление буфером */
 void vbuf_clear(uint8_t color);
-
-/**
- * Очистить прямоугольную область
- * @param rect Прямоугольник
- * @param color Цвет заполнения
- */
 void vbuf_clear_rect(const vbuf_rect_t* rect, uint8_t color);
-
-/**
- * Прокрутить буфер вверх
- * @param lines Количество строк для прокрутки
- */
-void vbuf_scroll_up(uint8_t lines);
-
-/**
- * Прокрутить буфер вниз
- * @param lines Количество строк для прокрутки
- */
-void vbuf_scroll_down(uint8_t lines);
-
-/**
- * Установить область отсечения (clipping)
- * @param rect Прямоугольник или NULL для сброса
- */
+void vbuf_scroll_up(uint8_t pixels);
+void vbuf_scroll_down(uint8_t pixels);
 void vbuf_set_clip_rect(const vbuf_rect_t* rect);
-
-/**
- * Получить текущую область отсечения
- * @param rect Указатель для заполнения
- */
 void vbuf_get_clip_rect(vbuf_rect_t* rect);
+void vbuf_copy_rect(uint16_t src_x, uint16_t src_y, 
+                    uint16_t dst_x, uint16_t dst_y,
+                    uint16_t width, uint16_t height);
 
-/**
- * Копировать прямоугольную область внутри буфера
- * @param src Исходный прямоугольник
- * @param dst_x Целевая X координата
- * @param dst_y Целевая Y координата
- */
-void vbuf_copy_rect(const vbuf_rect_t* src, uint16_t dst_x, uint16_t dst_y);
-
-/* ==================== Работа с пикселями ==================== */
-
-/**
- * Получить адрес в VRAM для координат
- * @param x Координата X
- * @param y Координата Y
- * @return Адрес в формате: (bank << 16) | offset
- */
-uint32_t vbuf_get_addr(uint16_t x, uint16_t y);
-
-/**
- * Нарисовать пиксель (без проверки отсечения)
- * @param x Координата X
- * @param y Координата Y
- * @param color Цвет
- */
+/* Примитивы рисования */
+void* vbuf_get_addr(uint16_t x, uint16_t y, uint8_t* bitmask);
 void vbuf_put_pixel_fast(uint16_t x, uint16_t y, uint8_t color);
-
-/**
- * Нарисовать пиксель (с проверкой отсечения)
- * @param x Координата X
- * @param y Координата Y
- * @param color Цвет
- * @return true если пиксель нарисован
- */
 bool vbuf_put_pixel(uint16_t x, uint16_t y, uint8_t color);
-
-/**
- * Получить цвет пикселя
- * @param x Координата X
- * @param y Координата Y
- * @return Цвет пикселя
- */
 uint8_t vbuf_get_pixel(uint16_t x, uint16_t y);
-
-/**
- * Нарисовать горизонтальную линию (быстрая)
- * @param x Начальная X
- * @param y Y координата
- * @param length Длина линии
- * @param color Цвет
- */
 void vbuf_draw_hline(uint16_t x, uint16_t y, uint16_t length, uint8_t color);
-
-/**
- * Нарисовать вертикальную линию (быстрая)
- * @param x X координата
- * @param y Начальная Y
- * @param length Длина линии
- * @param color Цвет
- */
 void vbuf_draw_vline(uint16_t x, uint16_t y, uint16_t length, uint8_t color);
+void vbuf_draw_line(uint16_t x1, uint16_t y1, 
+                    uint16_t x2, uint16_t y2, uint8_t color);
+void vbuf_draw_rect(uint16_t x, uint16_t y, 
+                    uint16_t width, uint16_t height, uint8_t color);
+void vbuf_fill_rect(uint16_t x, uint16_t y, 
+                    uint16_t width, uint16_t height, uint8_t color);
 
-/**
- * Нарисовать линию (алгоритм Брезенхэма)
- * @param x0 Начальная X
- * @param y0 Начальная Y
- * @param x1 Конечная X
- * @param y1 Конечная Y
- * @param color Цвет
- */
-void vbuf_draw_line(uint16_t x0, uint16_t y0, 
-                    uint16_t x1, uint16_t y1, 
-                    uint8_t color);
+/* Текст и битмапы */
+void vbuf_draw_char_at_addr(const uint8_t* font_char, void* vram_addr);
+void vbuf_draw_char(const uint8_t* font, uint8_t char_code,
+                    uint16_t x, uint16_t y);
+void vbuf_draw_bitmap(const uint8_t* bitmap, uint16_t x, uint16_t y,
+                      uint16_t width, uint16_t height);
 
-/**
- * Нарисовать прямоугольник (контур)
- * @param rect Прямоугольник
- * @param color Цвет границы
- */
-void vbuf_draw_rect(const vbuf_rect_t* rect, uint8_t color);
-
-/**
- * Заполнить прямоугольник
- * @param rect Прямоугольник
- * @param color Цвет заливки
- */
-void vbuf_fill_rect(const vbuf_rect_t* rect, uint8_t color);
-
-/* ==================== Работа с текстом и битмапами ==================== */
-
-/**
- * Нарисовать 8x8 символ (1bpp)
- * @param x Координата X
- * @param y Координата Y
- * @param glyph_data Данные глифа (8 байт)
- * @param color Цвет символа (для 1bpp)
- */
-void vbuf_draw_char_8x8(uint16_t x, uint16_t y, 
-                       const uint8_t* glyph_data, 
-                       uint8_t color);
-
-/**
- * Нарисовать битмап (1bpp)
- * @param x Координата X
- * @param y Координата Y
- * @param width Ширина в пикселях (до 255)
- * @param height Высота в пикселях (до 255)
- * @param bitmap_data Данные битмапа
- * @param color Цвет (для 1bpp)
- * @param transparent Прозрачный цвет (только для многоцветных режимов)
- */
-void vbuf_draw_bitmap(uint16_t x, uint16_t y,
-                      uint8_t width, uint8_t height,
-                      const uint8_t* bitmap_data,
-                      uint8_t color,
-                      uint8_t transparent);
-
-/* ==================== Двойная буферизация ==================== */
-
-/**
- * Показать задний буфер (если поддерживается)
- */
+/* Двойная буферизация */
 void vbuf_swap_buffers(void);
+void* vbuf_get_backbuf(void);
+void vbuf_clear_backbuf(uint8_t color);
 
-/**
- * Получить адрес заднего буфера
- * @return Адрес в формате: (bank << 16) | offset
- */
-uint32_t vbuf_get_backbuffer_addr(void);
+/* Системные функции */
+bool vbuf_activate_driver(void* driver_vtable);
+void* vbuf_get_current_vtable(void);
 
-/**
- * Очистить задний буфер
- * @param color Цвет заполнения
- */
-void vbuf_clear_backbuffer(uint8_t color);
+/* Константы */
+#define VBUF_CMD_RESET             0x00
+#define VBUF_CMD_ENABLE_DOUBLEBUF  0x01
+#define VBUF_CMD_DISABLE_DOUBLEBUF 0x02
+#define VBUF_CMD_SET_BANK          0x03
 
-/* ==================== Предопределенные драйверы ==================== */
-
-// Команды для vbuf_command()
-#define VBUF_CMD_RESET           0x00  // Сброс драйвера
-#define VBUF_CMD_ENABLE_DOUBLEBUF 0x01  // Включить двойную буферизацию
-#define VBUF_CMD_DISABLE_DOUBLEBUF 0x02 // Выключить двойную буферизацию
-#define VBUF_CMD_SET_BANK        0x03  // Установить банк MMU (param: номер банка)
-
-/* ==================== Макросы для удобства ==================== */
-
-// Быстрая проверка ошибок
-#define VBUF_CHECK(expr) do { \
-    uint8_t __err = (expr); \
-    if (__err != VBUF_ERR_SUCCESS) { \
-        return __err; \
-    } \
-} while(0)
-
-// Автоматический выбор драйвера с проверкой
-#define VBUF_INIT(driver_id) do { \
-    uint8_t __err = vbuf_select_driver(driver_id); \
-    if (__err != VBUF_ERR_SUCCESS) { \
-        /* Обработка ошибки */ \
-    } \
-} while(0)
+#define VBUF_FLAG_INTERLACED     (1 << 0)
+#define VBUF_FLAG_DOUBLEBUF      (1 << 1)
+#define VBUF_FLAG_LINEAR         (1 << 2)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // ALESTE_VBUF_H
+#endif /* VBUF_H */

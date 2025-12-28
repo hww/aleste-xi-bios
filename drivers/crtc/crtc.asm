@@ -36,22 +36,23 @@ DEPENDS_ON:
 ; ===================================================================
 ; ТАБЛИЦА ПЕРЕХОДОВ (15 байт + специфичные методы)
 ; ===================================================================
-PUBLIC _crtc_vtable
-PUBLIC _crtc_detect, _crtc_install, _crtc_get_info, _crtc_command
-PUBLIC _crtc_uninstall, _crtc_set_mode, _crtc_set_view
+PUBLIC __crtc_vtable
+PUBLIC __crtc_detect, __crtc_install, __crtc_get_info, __crtc_command
+PUBLIC __crtc_uninstall, __crtc_set_mode, __crtc_set_view
 
 SECTION DRV_VTABLE
 align 32
 
-_crtc_vtable:
-_crtc_detect:      jp crtc_detect       ; +0  - проверка наличия
-_crtc_install:     jp crtc_install      ; +3  - инициализация
-_crtc_get_info:    jp crtc_get_info     ; +6  - информация
-_crtc_command:     jp crtc_command      ; +9  - универсальные команды
-_crtc_uninstall:   jp crtc_uninstall    ; +12 - выгрузка
+__crtc_vtable:
+__crtc_detect:      jp crtc_detect       ; +0  - проверка наличия
+__crtc_install:     jp crtc_install      ; +3  - инициализация
+__crtc_get_info:    jp crtc_get_info     ; +6  - информация
+__crtc_command:     jp crtc_command      ; +9  - универсальные команды
+__crtc_uninstall:   jp crtc_uninstall    ; +12 - выгрузка
 ; Специфичные методы CRTC
-_crtc_set_mode:    jp crtc_set_mode     ; +15 - установка видеорежима
-_crtc_set_view:    jp crtc_set_view     ; +18 - установка адреса отображения
+__crtc_set_mode:    jp crtc_set_mode     ; +15 - установка видеорежима
+__crtc_set_view:    jp crtc_set_view     ; +18 - установка адреса отображения
+__crtc_vtable_end:
 
 ; ===================================================================
 ; ДАННЫЕ ДРАЙВЕРА

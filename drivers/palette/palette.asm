@@ -19,21 +19,21 @@ SECTION DRV_VTABLE
 ALIGN 32
 
 ; Экспортируем ВСЕ метки VTable
-PUBLIC _palette_vtable
-PUBLIC _palette_detect, _palette_install, _palette_get_info
-PUBLIC _palette_command, _palette_uninstall
-PUBLIC _palette_set_color, _palette_set_border, _palette_load
+PUBLIC __palette_vtable
+PUBLIC __palette_detect, __palette_install, __palette_get_info
+PUBLIC __palette_command, __palette_uninstall
+PUBLIC __palette_set_color, __palette_set_border, __palette_load
 
-_palette_vtable:
-_palette_detect:    jp _undefined_method
-_palette_install:   jp _undefined_method
-_palette_get_info:  jp _undefined_method
-_palette_command:   jp _undefined_method
-_palette_uninstall: jp _undefined_method
-_palette_set_color: jp _undefined_method
-_palette_set_border:jp _undefined_method
-_palette_load:      jp _undefined_method
-_palette_vtable_end:
+__palette_vtable:
+__palette_detect:    jp _undefined_method
+__palette_install:   jp _undefined_method
+__palette_get_info:  jp _undefined_method
+__palette_command:   jp _undefined_method
+__palette_uninstall: jp _undefined_method
+__palette_set_color: jp _undefined_method
+__palette_set_border:jp _undefined_method
+__palette_load:      jp _undefined_method
+__palette_vtable_end:
 
 ; -----------------------------------------------------------------------------
 ; Зависимости драйвера
@@ -69,9 +69,9 @@ SECTION DRV_CODE
 ; Вход: HL = адрес VTable конкретного драйвера
 PUBLIC _palette_activate_driver
 _palette_activate_driver:
-    ld de, _palette_vtable
+    ld de, __palette_vtable
     ld (current_driver), de
-    ld bc, _palette_vtable_end-_palette_vtable
+    ld bc, __palette_vtable_end-__palette_vtable
     ldir
     ret
 

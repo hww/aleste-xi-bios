@@ -41,5 +41,7 @@
 *.dwo
 
 
+*.i
+
 output
 build

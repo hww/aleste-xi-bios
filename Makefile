@@ -33,11 +33,16 @@ DRIVERS = \
 	bios/errors.asm \
 	bios/undefined_method.asm \
 	drivers/mmu/mmu.asm \
+	drivers/mmu/mmu_mem.asm \
 	drivers/crtc/crtc.asm \
 	drivers/palette/palette.asm \
 	drivers/palette/palette_12b.asm \
 	drivers/vbuf/vbuf_16k1b.asm \
-	drivers/vbuf/vbuf.asm
+	drivers/vbuf/vbuf.asm \
+	src/drivers/mmu.c \
+	src/drivers/crtc.c \
+	src/drivers/palette.c \
+	src/drivers/vbuf.c 
 
 FONTS = fonts/font_win1252.asm
 
@@ -79,5 +84,17 @@ $(TARGET).bin: $(SECTIONS) $(CRT) $(DRIVERS) $(SOURCES)
 
 	@echo "✅ Образ $(IMAGE) успешно собран."
 
+preprocess: prepare
+	$(CC) $(CFLAGS) -E \
+	-o $(BUILD_DIR)/$(TARGET).i \
+	$(SOURCES) \
+	--list
+debug_vbuf: prepare
+	$(CC) +z80 -vn -Iinclude -I. -clib=sdcc_iy \
+	-E \
+	src/drivers/vbuf.c \
+	-o $(BUILD_DIR)/vbuf.i
+	@echo "Препроцессорный файл создан: $(BUILD_DIR)/vbuf.i"
+	@grep -n "P" $(BUILD_DIR)/vbuf.i || echo "Символ P не найден в препроцессорном файле"
 clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
