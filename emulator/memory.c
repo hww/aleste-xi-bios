@@ -1,6 +1,6 @@
 #include "memory.h"
 
-unsigned char memory[RAM_SIZE];
+uint8_t memory[RAM_SIZE];
 
 // ============================================================
 // Ports

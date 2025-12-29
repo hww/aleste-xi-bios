@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -I../deps/z80ex/include -Wall `sdl2-config --cflags`
 LIBS = `sdl2-config --libs` -L../deps/z80ex/lib -lz80ex -lz80ex_dasm
 
-SRCS = main.c debugger.c screen.c memory.c ports.c
+SRCS = main.c debugger.c screen.c memory.c ports.c buffer_printer.c
 OBJ = $(SRCS:.c=.o)
 TARGET = ../bin/z80_emu
 

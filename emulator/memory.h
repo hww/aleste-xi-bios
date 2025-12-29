@@ -7,7 +7,7 @@
 #define RAM_SIZE 0x100 * 4 * 256  
 #define ROM_SIZE 0x4000
 
-extern unsigned char memory[];
+extern uint8_t memory[];
 
 void mem_write(Z80EX_CONTEXT *cpu, uint16_t addr, uint8_t value, void *user_data) ;
 uint8_t mem_read(Z80EX_CONTEXT *cpu, uint16_t addr, int m1_state, void *user_data) ;
