@@ -18,6 +18,5 @@ void     mmu_free(uint8_t start, uint8_t count);
 
 // Расширенная статистика
 uint16_t mmu_get_free_pages(void);
-uint16_t mmu_get_alloc_count(void); // сколько раз вызывали alloc
 
 #endif

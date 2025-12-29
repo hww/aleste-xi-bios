@@ -1,0 +1,1 @@
+z80asm -b test.asm

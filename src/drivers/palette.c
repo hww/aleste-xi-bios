@@ -35,11 +35,11 @@ extern void _palette_12b_vtable(void);
 
 /* palette_detect - проверка наличия палитры */
 bool palette_detect(void) __z88dk_fastcall  __naked {
-    __asm
-        ; fastcall: HL уже содержит пустой аргумент
+    __asm 
+        // fastcall: HL уже содержит пустой аргумент
          jp __palette_detect
-        ; Возврат: A=1 если найдено, A=0 если нет
-        ; Z88dk автоматически преобразует A в bool
+        // Возврат: A=1 если найдено, A=0 если нет
+        // Z88dk автоматически преобразует A в bool
     __endasm;
 }
 
@@ -47,10 +47,10 @@ bool palette_detect(void) __z88dk_fastcall  __naked {
 uint8_t palette_install(void) __z88dk_fastcall  __naked {
     __asm
          jp __palette_install
-        ; Возврат: A=код ошибки (0 при успехе)
+        // Возврат: A=код ошибки (0 при успехе)
     __endasm;
 }
-
+//
 /* palette_get_info - информация о драйвере */
 void* palette_get_info(void) __z88dk_fastcall  __naked {
     __asm
@@ -83,7 +83,7 @@ uint8_t palette_command(uint8_t cmd, uint16_t param) __naked {
         ret
     __endasm;
 }
-
+//
 /* palette_uninstall - деинициализация */
 uint8_t palette_uninstall(void) __z88dk_fastcall  __naked {
     __asm
@@ -174,6 +174,7 @@ uint8_t palette_set_color_cpc(uint8_t index, palette_color_cpc_t color) __naked 
 
 /* palette_set_border - установка цвета бордюра */
 uint8_t palette_set_border(palette_color_12b_t color) __z88dk_fastcall  __naked {
+    color;
     __asm
         ; fastcall: цвет уже в HL
         ld c, l
@@ -188,34 +189,33 @@ uint8_t palette_set_border(palette_color_12b_t color) __z88dk_fastcall  __naked 
 uint8_t palette_load_colors(uint8_t start_index, const void* colors, uint8_t count) __naked {
     start_index; colors; count;
     __asm
-        ld hl, #2
-        add hl, sp
-        
-        ; Получаем start_index для _palette_load
-        ld c, (hl)       ; C = start_index
-        inc hl
-        
-        ; Получаем указатель на массив
-        ld e, (hl)       ; E = colors low
-        inc hl
-        ld d, (hl)       ; D = colors high
-        inc hl
-        
-        ; Получаем количество
-        ld b, (hl)       ; B = count
-        
-        ; Теперь: C = start_index, DE = colors, B = count
-        ; _palette_load ожидает: HL=colors, B=count, C=start_index
-        ld h, d
-        ld l, e          ; HL = colors
-        
-        call __palette_load
-        
-        ld l, a          ; Возвращаем код ошибки
-        ret
+       ld hl, #2
+       add hl, sp
+       
+       // Получаем start_index для _palette_load
+       ld c, (hl)       ;; C = start_index
+       inc hl
+       
+       // Получаем указатель на массив
+       ld e, (hl)       ; E = colors low
+       inc hl
+       ld d, (hl)       ; D = colors high
+       inc hl
+       
+       // Получаем количество
+       ld b, (hl)       ; B = count
+       
+       // Теперь: C = start_index, DE = colors, B = count
+       // _palette_load ожидает: HL=colors, B=count, C=start_index
+       ld h, d
+       ld l, e          ; HL = colors
+       
+       call __palette_load
+       
+       ld l, a          ; Возвращаем код ошибки
+       ret
     __endasm;
 }
-
 // ============================================================================
 // УПРАВЛЕНИЕ ПОЛИМОРФИЗМОМ
 // ============================================================================
@@ -226,26 +226,6 @@ uint8_t palette_activate_12bit(void) __z88dk_fastcall  __naked {
         ld hl, __palette_12b_vtable
         call __palette_activate_driver
         ; _palette_activate_driver возвращает код в A
-        ld l, a
-        ret
-    __endasm;
-}
-
-/* palette_activate_cpc - активация CPC драйвера */
-uint8_t palette_activate_cpc(void) __z88dk_fastcall  __naked {
-    __asm
-        ld hl, _palette_cpc_vtable
-        call __palette_activate_driver
-        ld l, a
-        ret
-    __endasm;
-}
-
-/* palette_activate_msx - активация MSX драйвера */
-uint8_t palette_activate_msx(void) __z88dk_fastcall  __naked {
-    __asm
-        ld hl, _palette_msx_vtable
-        call __palette_activate_driver
         ld l, a
         ret
     __endasm;

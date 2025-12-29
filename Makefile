@@ -39,10 +39,14 @@ DRIVERS = \
 	drivers/palette/palette_12b.asm \
 	drivers/vbuf/vbuf_16k1b.asm \
 	drivers/vbuf/vbuf.asm \
+	drivers/audio/aduio_ay8910.asm \
+	drivers/audio/audio.asm \
 	src/drivers/mmu.c \
+	src/drivers/mmu_mem.c \
 	src/drivers/crtc.c \
 	src/drivers/palette.c \
-	src/drivers/vbuf.c 
+	src/drivers/vbuf.c \
+	src/drivers/audio.c \
 
 FONTS = fonts/font_win1252.asm
 

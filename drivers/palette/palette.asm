@@ -67,8 +67,8 @@ SECTION DRV_CODE
 
 ; Активировать конкретный драйвер палитры
 ; Вход: HL = адрес VTable конкретного драйвера
-PUBLIC _palette_activate_driver
-_palette_activate_driver:
+PUBLIC __palette_activate_driver
+__palette_activate_driver:
     ld de, __palette_vtable
     ld (current_driver), de
     ld bc, __palette_vtable_end-__palette_vtable
@@ -77,8 +77,8 @@ _palette_activate_driver:
 
 ; Получить текущую активную VTable
 ; Выход: HL = адрес текущей VTable
-PUBLIC _palette_get_current_vtable
-_palette_get_current_vtable:
+PUBLIC __palette_get_current_vtable
+__palette_get_current_vtable:
     ld hl, (current_driver)
     ret
 

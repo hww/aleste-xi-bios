@@ -1,0 +1,39 @@
+* Audio Drivers
+
+#+BEGIN_SRC c
+#include "drivers/audio.h"
+
+void demo_sound(void) {
+    // Инициализация
+    if (!audio_detect()) return;
+    audio_install();
+    
+    // Простая нота
+    audio_play_note(NOTE_C4, AUDIO_CHANNEL_A, VOLUME_NORMAL);
+    delay(500);
+    audio_stop(AUDIO_CHANNEL_A);
+    
+    // Аккорд
+    audio_play_chord(NOTE_C4, NOTE_E4, NOTE_G4, VOLUME_LOUD);
+    delay(1000);
+    audio_stop(AUDIO_CHANNEL_ALL);
+    
+    // Шум (выстрел)
+    audio_set_noise_type(NOISE_HIGH);
+    audio_enable_noise(AUDIO_CHANNEL_B, true);
+    audio_play_note(NOTE_C6, AUDIO_CHANNEL_B, VOLUME_LOUDEST);
+    delay(100);
+    audio_enable_noise(AUDIO_CHANNEL_B, false);
+    audio_stop(AUDIO_CHANNEL_B);
+    
+    // Огибающая (сирена)
+    audio_set_envelope(ENVELOPE_TRIANGLE, ENVELOPE_FAST);
+    audio_enable_envelope(AUDIO_CHANNEL_C, true);
+    audio_play_note(NOTE_A5, AUDIO_CHANNEL_C, 0);
+    delay(2000);
+    audio_stop(AUDIO_CHANNEL_C);
+    
+    // Деинициализация
+    audio_uninstall();
+}
+#+END_SRC

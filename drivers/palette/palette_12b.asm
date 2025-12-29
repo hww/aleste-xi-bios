@@ -48,9 +48,9 @@ defc PORT_MMIO_PAGE    = 0xF1
 SECTION DRV_VTABLE
 ALIGN 32
 
-PUBLIC _palette_12b_vtable
+PUBLIC __palette_12b_vtable
 
-_palette_12b_vtable:
+__palette_12b_vtable:
     jp _palette_12b_detect
     jp _palette_12b_install
     jp _palette_12b_get_info
