@@ -12,6 +12,7 @@
 #include "debugger.h"
 #include "palette.h"
 #include "ports.h"
+#include "minibuffer.h"
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
@@ -22,6 +23,7 @@ SDL_Texture* texture = NULL;
 uint32_t screen_buffer[SDL_SCREEN_WIDTH * SDL_SCREEN_HEIGHT];
 
 #include "font.h"
+
 // Вспомогательная функция для конвертации HEX строки в цвет
 uint32_t hex_to_color(const char* hex_str) {
     if (!hex_str || strlen(hex_str) != 6) return 0;
@@ -206,6 +208,96 @@ void update_screen_16k1b(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start) {
 // Глобальный буфер для текста
 static char debug_display_buffer[2048];
 
+
+// В minibuffer.c или screen.c
+void minibuffer_draw(Minibuffer *mb, SDL_Renderer *renderer, SDL_Window *window) {
+    if (!mb->visible) return;
+    
+    int win_w, win_h;
+    SDL_GetWindowSize(window, &win_w, &win_h);
+    
+    // 1. Вычисляем позицию мини-буфера (низ экрана)
+    // Примечание: win_h - это размер окна в пикселях, не SDL_SCREEN_HEIGHT!
+    // Нужно конвертировать координаты
+    float scale_x = (float)SDL_SCREEN_WIDTH / win_w;
+    float scale_y = (float)SDL_SCREEN_HEIGHT / win_h;
+    
+    int minibuf_screen_y = SDL_SCREEN_HEIGHT - 40; // Фиксированная позиция в screen_buffer
+    
+    // 2. Рисуем фон мини-буфера в screen_buffer
+    for (int y = minibuf_screen_y; y < SDL_SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
+            screen_buffer[y * SDL_SCREEN_WIDTH + x] = 0xFF303040; // Темно-синий
+        }
+    }
+    
+    // 3. Рисуем рамку
+    for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
+        if (minibuf_screen_y > 0) {
+            screen_buffer[minibuf_screen_y * SDL_SCREEN_WIDTH + x] = 0xFF505078; // Верхняя рамка
+        }
+        if (SDL_SCREEN_HEIGHT - 1 >= 0) {
+            screen_buffer[(SDL_SCREEN_HEIGHT - 1) * SDL_SCREEN_WIDTH + x] = 0xFF505078; // Нижняя рамка
+        }
+    }
+    for (int y = minibuf_screen_y; y < SDL_SCREEN_HEIGHT; y++) {
+        if (y < SDL_SCREEN_HEIGHT) {
+            screen_buffer[y * SDL_SCREEN_WIDTH] = 0xFF505078; // Левая рамка
+            screen_buffer[y * SDL_SCREEN_WIDTH + (SDL_SCREEN_WIDTH - 1)] = 0xFF505078; // Правая рамка
+        }
+    }
+    
+    // 4. Подготавливаем текст с курсором
+    char display_buffer[512];
+    
+    // Мигающий курсор
+    static uint32_t last_blink_time = 0;
+    static bool cursor_visible = true;
+    uint32_t current_time = SDL_GetTicks();
+    
+    if (current_time - last_blink_time > 500) {
+        cursor_visible = !cursor_visible;
+        last_blink_time = current_time;
+    }
+    
+    // Собираем строку с курсором
+    if (cursor_visible) {
+        if (mb->cursor_pos < mb->length) {
+            // Курсор внутри текста
+            snprintf(display_buffer, sizeof(display_buffer), 
+                    "%s%.*s{c:FFC864}|{c}%.*s",
+                    mb->prompt,
+                    mb->cursor_pos, mb->buffer,
+                    mb->length - mb->cursor_pos, mb->buffer + mb->cursor_pos);
+        } else {
+            // Курсор в конце
+            snprintf(display_buffer, sizeof(display_buffer), 
+                    "%s%s{c:FFC864}|",
+                    mb->prompt, mb->buffer);
+        }
+    } else {
+        // Курсор невидим (мигание)
+        snprintf(display_buffer, sizeof(display_buffer), 
+                "%s%s",
+                mb->prompt, mb->buffer);
+    }
+    
+    // 5. Рисуем текст мини-буфера
+    draw_text(10, minibuf_screen_y + 10, display_buffer, 0xFFFFFFFF);
+    
+    // 6. Рисуем режим [INS]/[OVR] справа
+    char mode_str[20];
+    snprintf(mode_str, sizeof(mode_str), "[%s]", mb->overwrite_mode ? "OVR" : "INS");
+    draw_text(SDL_SCREEN_WIDTH - 60, minibuf_screen_y + 10, mode_str, 0xFFFFFF00);
+    
+    // 7. Выводим в консоль для отладки
+    printf("\rMinibuffer: %s%s", mb->prompt, mb->buffer);
+    if (cursor_visible) {
+        printf(" [CURSOR]");
+    }
+    fflush(stdout);
+}
+
 // Главная функция update_screen
 void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenMode mode, Debugger *dbg)
 {
@@ -223,20 +315,32 @@ void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenM
             break;
     }
     
-    // 3. Генерация текста отладчика (используем новую функцию)
+    // 3. Генерация текста отладчика
+    static char debug_display_buffer[2048];
     debugger_render_to_buffer(dbg, cpu, memory, debug_display_buffer, sizeof(debug_display_buffer));
     
-    // 4. Рендеринг текста на экран
+    // 4. Рендеринг текста на экран (но оставляем место для мини-буфера!)
     int x = 10, y = 10;
-    char *line = strtok(debug_display_buffer, "\n");
-    while (line && y < SDL_SCREEN_HEIGHT - 10) {
+    char buffer_copy[2048];
+    strncpy(buffer_copy, debug_display_buffer, sizeof(buffer_copy));
+    
+    char *line = strtok(buffer_copy, "\n");
+    while (line && y < SDL_SCREEN_HEIGHT - 50) { // Оставляем 50 пикселей для мини-буфера!
         draw_text(x, y, line, 0xFFFFFFFF);
         y += 10;
         line = strtok(NULL, "\n");
     }
     
-    // 5. Обновление SDL
+    // 5. Отрисовка мини-буфера (он рисует прямо в screen_buffer)
+    extern Minibuffer minibuf; // Объявляем глобальную переменную
+    if (minibuf.visible) {
+        minibuffer_draw(&minibuf, renderer, window);
+    }
+    
+    // 6. Обновляем SDL текстуру из screen_buffer
     SDL_UpdateTexture(texture, NULL, screen_buffer, SDL_SCREEN_WIDTH * sizeof(uint32_t));
+    
+    // 7. Очищаем рендерер и рисуем текстуру
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);

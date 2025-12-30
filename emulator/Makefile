@@ -1,28 +1,54 @@
 CXX = g++
-CXXFLAGS = -I./src -I../deps/z80ex/include -Wall -std=c++17 `sdl2-config --cflags`
-LIBS = `sdl2-config --libs` -L../deps/z80ex/lib -lz80ex -lz80ex_dasm
 
-SRCS = src/main.cpp src/debugger.cpp src/screen.cpp \
-	src/memory.cpp src/ports.cpp src/buffer_printer.cpp \
-	src/mmu_native.cpp src/palette.cpp src/hex_dump.cpp \
+# Флаги компиляции
+CFLAGS = -O0 -g -Wall -std=c++17 -I../deps/z80ex/include `sdl2-config --cflags` -DDEBUG 
+# -DDEBUG вместо -DEBUG
 
+# Флаги линковки
+LDFLAGS = `sdl2-config --libs` -L../deps/z80ex/lib -lz80ex -lz80ex_dasm -lreadline -lpthread 
 
-OBJ = $(SRCS:.cpp=.o)
+# Исходные файлы
+SRCS = src/main.cpp \
+	src/debugger.cpp \
+	src/screen.cpp \
+	src/memory.cpp \
+	src/ports.cpp \
+	src/buffer_printer.cpp \
+	src/mmu_native.cpp \
+	src/palette.cpp \
+	src/hex_dump.cpp \
+	src/minibuffer.cpp
+
+# Объектные файлы (меняем src/ на obj/)
+OBJS = $(SRCS:src/%.cpp=obj/%.o)
+
+# Целевой файл
 TARGET = ../bin/z80_emu
 
 all: $(TARGET)
 
-$(TARGET): $(OBJ)
-	$(CXX) $(OBJ) -o $(TARGET) $(LIBS)
+# Правило линковки
+$(TARGET): $(OBJS)
+	@mkdir -p $(dir $@)  # Создаем папку bin
+	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# Правило компиляции
+obj/%.o: src/%.cpp
+	@mkdir -p $(dir $@)  # Создаем папку obj/src
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f src/*.o $(TARGET)
+	rm -rf obj/* ../bin/*
 
 run: all
+	../bin/z80_emu test/test.bin
+
+debug: all
+	gdb --args ../bin/z80_emu test/test.bin
+
+# Для тестирования
+run-test: all
 	test/build.sh 
 	../bin/z80_emu test/test.bin
 
-.PHONY: all clean run-test
+.PHONY: all clean run debug run-test
