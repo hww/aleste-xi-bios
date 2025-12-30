@@ -6,6 +6,7 @@
 #include <z80ex_dasm.h>
 #include "text_colors.h"
 #include "buffer_printer.h"
+#include "ports.h"
 
 // Функция для чтения байта (для дизассемблера)
 static uint8_t dasm_read_byte(uint16_t addr, void *user_data)
@@ -655,47 +656,60 @@ void debugger_render_to_buffer(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memor
         default: mode_str = "UNKNOWN";
     }
     
-    bp_println_color(&bp, COLOR_GREEN, "MODE: %s  BP: %d  INS: %llu",
+    bp_println_color(&bp, COLOR_GREEN, ">> XI Aleste DBG | MODE: %s | BP: %d | INS: %llu",
                    mode_str, dbg->breakpoint_count,
                    (unsigned long long)dbg->instruction_count);
-                   
+
+    bp_println_color(&bp, COLOR_LIME, "SLT %02X USER %02X SUPER %02X", 
+                   g_mmu.get_current_slot_reg(), 
+                   g_mmu.get_user_slot_reg(), 
+                   g_mmu.get_super_slot_reg());
+
+    bp_println_color(&bp, COLOR_LIME, "MAP %01X:%02X %01X:%02X %01X:%02X %01X:%02X", 
+                   g_mmu.get_current_slot(0x0000, ECycle::MRD), g_mmu.get_current_bank(0x0000, ECycle::MRD), 
+                   g_mmu.get_current_slot(0x4000, ECycle::MRD), g_mmu.get_current_bank(0x4000, ECycle::MRD), 
+                   g_mmu.get_current_slot(0x8000, ECycle::MRD), g_mmu.get_current_bank(0x8000, ECycle::MRD), 
+                   g_mmu.get_current_slot(0xC000, ECycle::MRD), g_mmu.get_current_bank(0xC000, ECycle::MRD)); 
+
     // 1. Первая строка: PC и состояние прерываний
     const char *di_ei = (iff1 == 0) ? "DI" : "EI";
-    bp_println_color(&bp, COLOR_CYAN, " PC %04X %s I=%02X", pc, di_ei, i);
+    bp_println_color(&bp, COLOR_CYAN, "PC  %04X %s I=%02X", pc, di_ei, i);
     
     // 2. Регистр SP с байтами
-    bp_println_color(&bp, COLOR_CYAN, " SP %04X %02X%02X %c%c", 
+    bp_println_color(&bp, COLOR_CYAN, "SP  %04X %02X%02X %c%c", 
                    sp, sp_bytes[0], sp_bytes[1],
                    get_char_from_byte(sp_bytes[0]),
                    get_char_from_byte(sp_bytes[1]));
     
+
+                   
     // 3. Регистр A с флагами
-    bp_println_color(&bp, COLOR_CYAN, "  A %02X %c %s",
+    bp_println_color(&bp, COLOR_CYAN, " A  %02X %c %s",
                    (af >> 8) & 0xFF,
                    get_char_from_byte((af >> 8) & 0xFF),
                    flags);
 
     
     // 4. Регистры BC, DE, HL, IX
-    bp_println_color(&bp, COLOR_CYAN, " BC %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_CYAN, "BC  %04X %02X%02X %c%c",
                    bc, bc_bytes[0], bc_bytes[1],
                    get_char_from_byte(bc_bytes[0]),
                    get_char_from_byte(bc_bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_CYAN, " DE %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_CYAN, "DE  %04X %02X%02X %c%c",
                    de, de_bytes[0], de_bytes[1],
                    get_char_from_byte(de_bytes[0]),
                    get_char_from_byte(de_bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_CYAN, " HL %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_CYAN, "HL  %04X %02X%02X %c%c",
                    hl, hl_bytes[0], hl_bytes[1],
                    get_char_from_byte(hl_bytes[0]),
                    get_char_from_byte(hl_bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_CYAN, " IX %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_CYAN, "IX  %04X %02X%02X %c%c",
                    ix, ix_bytes[0], ix_bytes[1],
                    get_char_from_byte(ix_bytes[0]),
                    get_char_from_byte(ix_bytes[1]));
@@ -721,25 +735,25 @@ void debugger_render_to_buffer(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memor
         '\0'
     };
     
-    bp_println_color(&bp, COLOR_MAGENTA, "` A %02X %c %s",
+    bp_println_color(&bp, COLOR_MAGENTA, " A` %02X %c %s",
                    (af_ >> 8) & 0xFF,
                    get_char_from_byte((af_ >> 8) & 0xFF),
                    flags_);
 
     
-    bp_println_color(&bp, COLOR_MAGENTA, "`BC %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_MAGENTA, "BC` %04X %02X%02X %c%c",
                    bc_, bc__bytes[0], bc__bytes[1],
                    get_char_from_byte(bc__bytes[0]),
                    get_char_from_byte(bc__bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_MAGENTA, "`DE %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_MAGENTA, "DE` %04X %02X%02X %c%c",
                    de_, de__bytes[0], de__bytes[1],
                    get_char_from_byte(de__bytes[0]),
                    get_char_from_byte(de__bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_MAGENTA, "`HL %04X %02X%02X %c%c",
+    bp_println_color(&bp, COLOR_MAGENTA, "HL` %04X %02X%02X %c%c",
                    hl_, hl__bytes[0], hl__bytes[1],
                    get_char_from_byte(hl__bytes[0]),
                    get_char_from_byte(hl__bytes[1]));

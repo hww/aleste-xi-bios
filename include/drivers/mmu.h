@@ -9,18 +9,6 @@ typedef struct {
     uint8_t bank[4];
 } mmu_ctx_t;
 
-// --- Точки входа VTable (для линкера) ---
-extern void _mmu_detect;
-extern void _mmu_install;
-extern void _mmu_get_info;
-extern void _mmu_command;
-extern void _mmu_uninstall;
-extern void _mmu_set_context;
-extern void _mmu_get_context;
-extern void _mmu_map_page;
-extern void _mmu_lock; 
-extern void _mmu_unlock;
-
 // --- Публичный Си-интерфейс ---
 
 uint8_t  mmu_detect(void);

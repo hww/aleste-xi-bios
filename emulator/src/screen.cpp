@@ -10,7 +10,8 @@
 #include "screen.h"
 #include "memory.h"
 #include "debugger.h"
-
+#include "palette.h"
+#include "ports.h"
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
@@ -60,7 +61,6 @@ void draw_text(int x, int y, const char* str, uint32_t default_color) {
     int current_x = x;
     int current_y = y;
     uint32_t current_color = default_color;
-    const char *original_str = str; // Сохраняем указатель на начало для отладки
     
     while (*str && *str != '\0') {
         // Обработка цветовых кодов в формате {c:RRGGBB}
@@ -165,7 +165,7 @@ const uint16_t palette[] = {
 void update_screen_16k1b(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start) {
     const int MODE_WIDTH = 640;
     const int MODE_HEIGHT = 200;
-    const int BYTES_PER_LINE = 80;
+    const int BYTES_PER_LINE = MODE_WIDTH / 8;
     
     // Проверяем, что масштаб целый
     if (SDL_SCREEN_HEIGHT % MODE_HEIGHT != 0) {
@@ -191,14 +191,14 @@ void update_screen_16k1b(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start) {
                 
                 if (dst_base + 7 >= SDL_SCREEN_WIDTH * SDL_SCREEN_HEIGHT) continue;
                 
-                screen_buffer[dst_base + 0] = palette[(color >> 7) & 1];
-                screen_buffer[dst_base + 1] = palette[(color >> 6) & 1];
-                screen_buffer[dst_base + 2] = palette[(color >> 5) & 1];
-                screen_buffer[dst_base + 3] = palette[(color >> 4) & 1];
-                screen_buffer[dst_base + 4] = palette[(color >> 3) & 1];
-                screen_buffer[dst_base + 5] = palette[(color >> 2) & 1];
-                screen_buffer[dst_base + 6] = palette[(color >> 1) & 1];
-                screen_buffer[dst_base + 7] = palette[color & 1];
+                screen_buffer[dst_base + 0] = g_palette.translate_color_argb32((color >> 7) & 1);
+                screen_buffer[dst_base + 1] = g_palette.translate_color_argb32((color >> 6) & 1);
+                screen_buffer[dst_base + 2] = g_palette.translate_color_argb32((color >> 5) & 1);
+                screen_buffer[dst_base + 3] = g_palette.translate_color_argb32((color >> 4) & 1);
+                screen_buffer[dst_base + 4] = g_palette.translate_color_argb32((color >> 3) & 1);
+                screen_buffer[dst_base + 5] = g_palette.translate_color_argb32((color >> 2) & 1);
+                screen_buffer[dst_base + 6] = g_palette.translate_color_argb32((color >> 1) & 1);
+                screen_buffer[dst_base + 7] = g_palette.translate_color_argb32(color & 1);
             }
         }
     }

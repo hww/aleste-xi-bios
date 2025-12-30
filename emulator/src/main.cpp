@@ -149,8 +149,10 @@ int main(int argc, char *argv[])
     
     // Инициализация дебаггера
     debugger_init(&debugger);
-    mmu.reset();
+    ports_reset();
     
+    printf("Loading file %s...\n", argv[1]);
+
     // Загрузка BIOS
     FILE *f = fopen(argv[1], "rb");
     if (!f) {
