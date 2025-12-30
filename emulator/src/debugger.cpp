@@ -537,7 +537,7 @@ bool debugger_update(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memory)
     }
     
     // Режимы RUN и TRACE
-    if (dbg->mode == DEBUG_MODE_RUN || dbg->mode == DEBUG_MODE_TRACE) {
+    if (dbg->mode == DEBUG_MODE_TRACE) {
         int cycles = z80ex_step(cpu);
         dbg->total_cycles += cycles;
         dbg->instruction_count++;
@@ -554,6 +554,18 @@ bool debugger_update(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memory)
         return true;
     }
     
+    if (dbg->mode == DEBUG_MODE_RUN) {
+        for (int i=0; i<2000; i++) {
+            int cycles = z80ex_step(cpu);
+            dbg->total_cycles += cycles;
+            dbg->instruction_count++;
+        }
+        // Захватываем состояние после выполнения
+        debugger_capture_state(dbg, cpu, memory);
+        
+        return true;
+    }
+
     return false;
 }
 
@@ -630,43 +642,60 @@ void debugger_render_to_buffer(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memor
     get_bytes_at_address(memory, ix, ix_bytes, 2);
     get_bytes_at_address(memory, iy, iy_bytes, 2);
     
+      
+    // 7. Статус дебаггера
+    bp_println(&bp, "");
+    
+    const char *mode_str;
+    switch (dbg->mode) {
+        case DEBUG_MODE_RUN: mode_str = "RUN"; break;
+        case DEBUG_MODE_TRACE: mode_str = "TRACE"; break;
+        case DEBUG_MODE_STEP: mode_str = "STEP"; break;
+        case DEBUG_MODE_PAUSE: mode_str = "PAUSE"; break;
+        default: mode_str = "UNKNOWN";
+    }
+    
+    bp_println_color(&bp, COLOR_GREEN, "MODE: %s  BP: %d  INS: %llu",
+                   mode_str, dbg->breakpoint_count,
+                   (unsigned long long)dbg->instruction_count);
+                   
     // 1. Первая строка: PC и состояние прерываний
     const char *di_ei = (iff1 == 0) ? "DI" : "EI";
     bp_println_color(&bp, COLOR_CYAN, " PC %04X %s I=%02X", pc, di_ei, i);
     
     // 2. Регистр SP с байтами
-    bp_println_color(&bp, COLOR_CYAN, " SP %04X %02X%02X \"%c%c\"", 
+    bp_println_color(&bp, COLOR_CYAN, " SP %04X %02X%02X %c%c", 
                    sp, sp_bytes[0], sp_bytes[1],
                    get_char_from_byte(sp_bytes[0]),
                    get_char_from_byte(sp_bytes[1]));
     
     // 3. Регистр A с флагами
-    bp_println_color(&bp, COLOR_CYAN, "  A %02X \"%c\" %s",
+    bp_println_color(&bp, COLOR_CYAN, "  A %02X %c %s",
                    (af >> 8) & 0xFF,
                    get_char_from_byte((af >> 8) & 0xFF),
                    flags);
 
     
     // 4. Регистры BC, DE, HL, IX
-    bp_println_color(&bp, COLOR_CYAN, " BC %04X %02X%02X \"%c%c\"",
+    bp_println_color(&bp, COLOR_CYAN, " BC %04X %02X%02X %c%c",
                    bc, bc_bytes[0], bc_bytes[1],
                    get_char_from_byte(bc_bytes[0]),
                    get_char_from_byte(bc_bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_CYAN, " DE %04X %02X%02X \"%c%c\"",
+    bp_println_color(&bp, COLOR_CYAN, " DE %04X %02X%02X %c%c",
                    de, de_bytes[0], de_bytes[1],
                    get_char_from_byte(de_bytes[0]),
                    get_char_from_byte(de_bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_CYAN, " HL %04X %02X%02X \"%c%c\"",
+    bp_println_color(&bp, COLOR_CYAN, " HL %04X %02X%02X %c%c",
                    hl, hl_bytes[0], hl_bytes[1],
                    get_char_from_byte(hl_bytes[0]),
                    get_char_from_byte(hl_bytes[1]));
 
     
-    bp_println_color(&bp, COLOR_CYAN, " IX %04X %02X%02X \"%c%c\"",
+    bp_println_color(&bp, COLOR_CYAN, " IX %04X %02X%02X %c%c",
                    ix, ix_bytes[0], ix_bytes[1],
                    get_char_from_byte(ix_bytes[0]),
                    get_char_from_byte(ix_bytes[1]));
@@ -772,7 +801,7 @@ void debugger_render_to_buffer(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memor
         }
         
         // Выделяем текущую команду красным цветом
-        bp_println_color(&bp, COLOR_RED, ">%04X %-8s %s", pc, current_bytes_str, current_dasm);
+        bp_println_color(&bp, COLOR_RED, " >%04X %-8s %s", pc, current_bytes_str, current_dasm);
         bp_println(&bp, "");
         
         // Следующие команды (после текущей)
@@ -801,22 +830,7 @@ void debugger_render_to_buffer(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memor
             next_pc += next_len;
         }
     }
-    
-    // 7. Статус дебаггера
-    bp_println(&bp, "");
-    
-    const char *mode_str;
-    switch (dbg->mode) {
-        case DEBUG_MODE_RUN: mode_str = "RUN"; break;
-        case DEBUG_MODE_TRACE: mode_str = "TRACE"; break;
-        case DEBUG_MODE_STEP: mode_str = "STEP"; break;
-        case DEBUG_MODE_PAUSE: mode_str = "PAUSE"; break;
-        default: mode_str = "UNKNOWN";
-    }
-    
-    bp_println_color(&bp, COLOR_GREEN, "MODE: %s  BP: %d  INS: %llu",
-                   mode_str, dbg->breakpoint_count,
-                   (unsigned long long)dbg->instruction_count);
+  
     
     // Завершаем строку нуль-терминатором
     if (bp.position < bp.capacity) {

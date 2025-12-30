@@ -1,21 +1,24 @@
-CC = gcc
-CFLAGS = -I../deps/z80ex/include -Wall `sdl2-config --cflags`
+CXX = g++
+CXXFLAGS = -I./src -I../deps/z80ex/include -Wall -std=c++17 `sdl2-config --cflags`
 LIBS = `sdl2-config --libs` -L../deps/z80ex/lib -lz80ex -lz80ex_dasm
 
-SRCS = main.c debugger.c screen.c memory.c ports.c buffer_printer.c
-OBJ = $(SRCS:.c=.o)
+SRCS = src/main.cpp src/debugger.cpp src/screen.cpp src/memory.cpp src/ports.cpp src/buffer_printer.cpp src/mmu_native.cpp
+OBJ = $(SRCS:.cpp=.o)
 TARGET = ../bin/z80_emu
 
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET) $(LIBS)
+	$(CXX) $(OBJ) -o $(TARGET) $(LIBS)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f *.o $(TARGET)
+	rm -f src/*.o $(TARGET)
 
 run-test: all
+	test/build.sh 
 	../bin/z80_emu test/test.bin
+
+.PHONY: all clean run-test

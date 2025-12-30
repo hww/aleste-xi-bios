@@ -2,7 +2,7 @@
 #define _PORTS_H_
 
 #include <stdint.h>
-#include <z80ex.h>
+#include "z80ex.h"
 
 #define UART_PORT 0x80
 

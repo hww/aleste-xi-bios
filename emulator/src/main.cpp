@@ -9,6 +9,7 @@
 #include "memory.h"
 #include "ports.h"
 #include "debugger.h"
+#include "mmu_native.h"
 
 // Глобальные переменные
 Debugger debugger;
@@ -148,6 +149,7 @@ int main(int argc, char *argv[])
     
     // Инициализация дебаггера
     debugger_init(&debugger);
+    mmu.reset();
     
     // Загрузка BIOS
     FILE *f = fopen(argv[1], "rb");

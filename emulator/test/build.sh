@@ -1,1 +1,1 @@
-z80asm -b test.asm
+z80asm -b test/test.asm
