@@ -4,7 +4,8 @@ LIBS = `sdl2-config --libs` -L../deps/z80ex/lib -lz80ex -lz80ex_dasm
 
 SRCS = src/main.cpp src/debugger.cpp src/screen.cpp \
 	src/memory.cpp src/ports.cpp src/buffer_printer.cpp \
-	src/mmu_native.cpp src/palette.cpp src/hex_dump.cpp 
+	src/mmu_native.cpp src/palette.cpp src/hex_dump.cpp \
+
 
 OBJ = $(SRCS:.cpp=.o)
 TARGET = ../bin/z80_emu

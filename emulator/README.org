@@ -1,0 +1,20 @@
+# 1. Запуск в режиме паузы (по умолчанию)
+./z80emu bios.bin
+
+# 2. Запуск сразу в режиме выполнения
+./z80emu --mode run bios.bin
+
+# 3. Запуск в режиме трассировки с задержкой 50мс
+./z80emu --mode trace --step-delay 50 bios.bin
+
+# 4. Установка нескольких точек останова
+./z80emu --mode pause -b 0x1000 -b 0x2000 -b 0x3000 bios.bin
+
+# 5. Запуск с GUI и точками останова
+./z80emu --gui -b 0x1000 -b 0x2000 --mode pause bios.bin
+
+# 6. Тихий режим с трассировкой
+./z80emu --quiet --mode trace bios.bin
+
+# 7. Вся комбинация
+./z80emu --verbose --gui --mode trace --step-delay 100 -b 0x0100 -b 0x0200 bios.bin
