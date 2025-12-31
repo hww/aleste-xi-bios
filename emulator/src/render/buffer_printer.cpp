@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdarg.h>
 
+
 // Инициализация
 void bp_init(BufferPrinter *bp, char *buffer, int capacity)
 {

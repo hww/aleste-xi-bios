@@ -1,6 +1,6 @@
 #include "palette.h"
 #include "hex_dump.h"
-#include "bus.h"
+#include "globals.h"
 
 void Palette::reset() {
     palette_index = 0;

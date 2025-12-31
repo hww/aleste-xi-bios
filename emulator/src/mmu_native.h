@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <array>
 
-#include "bus.h"
+#include "globals.h"
 
 class NativeMMU {
 public:

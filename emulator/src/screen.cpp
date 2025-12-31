@@ -5,25 +5,58 @@
 #include <z80ex_dasm.h>
 #include <SDL2/SDL.h>
 #include <string.h>
-
+#include <sstream>  
 
 #include "screen.h"
 #include "memory.h"
 #include "debugger.h"
 #include "palette.h"
 #include "ports.h"
-#include "minibuffer.h"
+#include "render/minibuffer.h"
+#include "render/ibuffer.h"
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 SDL_Texture* texture = NULL;
 
-#define SDL_SCREEN_WIDTH  (640)
-#define SDL_SCREEN_HEIGHT  (400)
 uint32_t screen_buffer[SDL_SCREEN_WIDTH * SDL_SCREEN_HEIGHT];
 
 #include "font.h"
 
+static bool blink_flag = true;
+// В debugger_render.cpp добавьте:
+uint32_t alpha_blend(uint32_t background, uint32_t foreground) {
+    // Извлекаем компоненты фона
+    uint8_t bg_a = (background >> 24) & 0xFF;
+    uint8_t bg_r = (background >> 16) & 0xFF;
+    uint8_t bg_g = (background >> 8) & 0xFF;
+    uint8_t bg_b = background & 0xFF;
+    
+    // Извлекаем компоненты переднего плана
+    uint8_t fg_a = (foreground >> 24) & 0xFF;
+    uint8_t fg_r = (foreground >> 16) & 0xFF;
+    uint8_t fg_g = (foreground >> 8) & 0xFF;
+    uint8_t fg_b = foreground & 0xFF;
+    
+    // Если передний план полностью прозрачный
+    if (fg_a == 0) return background;
+    
+    // Если передний план полностью непрозрачный
+    if (fg_a == 255) return foreground;
+    
+    // Alpha blending формула
+    float alpha = fg_a / 255.0f;
+    float inv_alpha = 1.0f - alpha;
+    
+    uint8_t r = static_cast<uint8_t>(fg_r * alpha + bg_r * inv_alpha);
+    uint8_t g = static_cast<uint8_t>(fg_g * alpha + bg_g * inv_alpha);
+    uint8_t b = static_cast<uint8_t>(fg_b * alpha + bg_b * inv_alpha);
+    
+    // Результирующая альфа (можно использовать максимальную)
+    uint8_t a = std::max(bg_a, fg_a);
+    
+    return (a << 24) | (r << 16) | (g << 8) | b;
+}
 // Вспомогательная функция для конвертации HEX строки в цвет
 uint32_t hex_to_color(const char* hex_str) {
     if (!hex_str || strlen(hex_str) != 6) return 0;
@@ -39,13 +72,27 @@ uint32_t hex_to_color(const char* hex_str) {
     }
     return color;
 }
-void draw_char(int x, int y, char c, uint32_t color) {
+
+void draw_char(int x, int y, char c, uint32_t color, EStyle style) {
     if (c < 32 || c > 127) return;
 
     int idx = 8 * (c-32);
 
     for (int i = 0; i < 8; i++) {
         unsigned char line = font8x8[idx+ i];
+        
+        switch (style)
+        {
+        case EStyle::Inverse:
+            line =(0xFF-line);
+            break;
+        case EStyle::InverseBlink:
+            line = blink_flag ? (0xFF-line) : line;
+            break;
+        default:
+            break;
+        }
+
         for (int j = 0; j < 8; j++) {
             if (line & (0x80 >> j)) {
                 int px = x + j;
@@ -124,6 +171,7 @@ void draw_text(int x, int y, const char* str, uint32_t default_color) {
     }
 
 }
+
 // ============================================================
 // SDL
 // ============================================================
@@ -205,24 +253,14 @@ void update_screen_16k1b(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start) {
         }
     }
 }
-// Глобальный буфер для текста
-static char debug_display_buffer[2048];
 
 
-// В minibuffer.c или screen.c
-void minibuffer_draw(Minibuffer *mb, SDL_Renderer *renderer, SDL_Window *window) {
-    if (!mb->visible) return;
-    
-    int win_w, win_h;
-    SDL_GetWindowSize(window, &win_w, &win_h);
-    
+
+void minibuffer_draw(Minibuffer &mb, SDL_Renderer *renderer, SDL_Window *window) {
+    if (!mb.is_visible()) return;
+
     // 1. Вычисляем позицию мини-буфера (низ экрана)
-    // Примечание: win_h - это размер окна в пикселях, не SDL_SCREEN_HEIGHT!
-    // Нужно конвертировать координаты
-    float scale_x = (float)SDL_SCREEN_WIDTH / win_w;
-    float scale_y = (float)SDL_SCREEN_HEIGHT / win_h;
-    
-    int minibuf_screen_y = SDL_SCREEN_HEIGHT - 40; // Фиксированная позиция в screen_buffer
+    int minibuf_screen_y = MINIBBUF_Y; 
     
     // 2. Рисуем фон мини-буфера в screen_buffer
     for (int y = minibuf_screen_y; y < SDL_SCREEN_HEIGHT; y++) {
@@ -232,72 +270,332 @@ void minibuffer_draw(Minibuffer *mb, SDL_Renderer *renderer, SDL_Window *window)
     }
     
     // 3. Рисуем рамку
+    // Верхняя граница
     for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
-        if (minibuf_screen_y > 0) {
-            screen_buffer[minibuf_screen_y * SDL_SCREEN_WIDTH + x] = 0xFF505078; // Верхняя рамка
-        }
-        if (SDL_SCREEN_HEIGHT - 1 >= 0) {
-            screen_buffer[(SDL_SCREEN_HEIGHT - 1) * SDL_SCREEN_WIDTH + x] = 0xFF505078; // Нижняя рамка
+        if (minibuf_screen_y > 0 && minibuf_screen_y < SDL_SCREEN_HEIGHT) {
+            screen_buffer[minibuf_screen_y * SDL_SCREEN_WIDTH + x] = 0xFF505078;
         }
     }
+    
+    // Нижняя граница (последняя строка экрана)
+    int bottom_line = SDL_SCREEN_HEIGHT - 1;
+    if (bottom_line >= 0 && bottom_line < SDL_SCREEN_HEIGHT) {
+        for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
+            screen_buffer[bottom_line * SDL_SCREEN_WIDTH + x] = 0xFF505078;
+        }
+    }
+    
+    // Боковые границы
     for (int y = minibuf_screen_y; y < SDL_SCREEN_HEIGHT; y++) {
-        if (y < SDL_SCREEN_HEIGHT) {
-            screen_buffer[y * SDL_SCREEN_WIDTH] = 0xFF505078; // Левая рамка
-            screen_buffer[y * SDL_SCREEN_WIDTH + (SDL_SCREEN_WIDTH - 1)] = 0xFF505078; // Правая рамка
+        if (y >= 0 && y < SDL_SCREEN_HEIGHT) {
+            // Левая граница
+            if (0 < SDL_SCREEN_WIDTH) {
+                screen_buffer[y * SDL_SCREEN_WIDTH] = 0xFF505078;
+            }
+            // Правая граница
+            if (SDL_SCREEN_WIDTH - 1 >= 0) {
+                screen_buffer[y * SDL_SCREEN_WIDTH + (SDL_SCREEN_WIDTH - 1)] = 0xFF505078;
+            }
         }
     }
     
     // 4. Подготавливаем текст с курсором
     char display_buffer[512];
     
-    // Мигающий курсор
+    // Мигающий курсор (используем статическую переменную для мигания)
     static uint32_t last_blink_time = 0;
-    static bool cursor_visible = true;
+    static bool blink_flag = true;  // Локальная переменная для мигания
+    
     uint32_t current_time = SDL_GetTicks();
     
     if (current_time - last_blink_time > 500) {
-        cursor_visible = !cursor_visible;
+        blink_flag = !blink_flag;
         last_blink_time = current_time;
     }
     
+    // Получаем данные из класса Minibuffer
+    const std::string& buffer = mb.get_text();
+    const std::string& prompt = mb.get_prompt();
+    int cursor_pos = mb.get_cursor_pos();
+    int length = buffer.length();
+    
     // Собираем строку с курсором
-    if (cursor_visible) {
-        if (mb->cursor_pos < mb->length) {
+    if (blink_flag) {
+        if (cursor_pos < length) {
             // Курсор внутри текста
             snprintf(display_buffer, sizeof(display_buffer), 
                     "%s%.*s{c:FFC864}|{c}%.*s",
-                    mb->prompt,
-                    mb->cursor_pos, mb->buffer,
-                    mb->length - mb->cursor_pos, mb->buffer + mb->cursor_pos);
+                    prompt.c_str(),
+                    cursor_pos, buffer.c_str(),
+                    length - cursor_pos, buffer.c_str() + cursor_pos);
         } else {
             // Курсор в конце
             snprintf(display_buffer, sizeof(display_buffer), 
                     "%s%s{c:FFC864}|",
-                    mb->prompt, mb->buffer);
+                    prompt.c_str(), buffer.c_str());
         }
     } else {
         // Курсор невидим (мигание)
-        snprintf(display_buffer, sizeof(display_buffer), 
-                "%s%s",
-                mb->prompt, mb->buffer);
+        if (cursor_pos < length) {
+            // Курсор внутри текста
+            snprintf(display_buffer, sizeof(display_buffer), 
+                    "%s%.*s{c:FFC864}.{c}%.*s",
+                    prompt.c_str(),
+                    cursor_pos, buffer.c_str(),
+                    length - cursor_pos, buffer.c_str() + cursor_pos);
+        } else {
+            // Курсор в конце
+            snprintf(display_buffer, sizeof(display_buffer), 
+                    "%s%s{c:FFC864}.",
+                    prompt.c_str(), buffer.c_str());
+        }
     }
     
     // 5. Рисуем текст мини-буфера
-    draw_text(10, minibuf_screen_y + 10, display_buffer, 0xFFFFFFFF);
+    draw_text(MINIBBUF_MARGIN_X, minibuf_screen_y + MINIBBUF_MARGIN_Y, display_buffer, 0xFFFFFFFF);
     
     // 6. Рисуем режим [INS]/[OVR] справа
     char mode_str[20];
-    snprintf(mode_str, sizeof(mode_str), "[%s]", mb->overwrite_mode ? "OVR" : "INS");
-    draw_text(SDL_SCREEN_WIDTH - 60, minibuf_screen_y + 10, mode_str, 0xFFFFFF00);
+    snprintf(mode_str, sizeof(mode_str), "[%s]", mb.is_overwrite_mode() ? "OVR" : "INS");
+    draw_text(SDL_SCREEN_WIDTH - 60, minibuf_screen_y + MINIBBUF_MARGIN_Y, mode_str, 0xFFFFFF00);
     
-    // 7. Выводим в консоль для отладки
-    printf("\rMinibuffer: %s%s", mb->prompt, mb->buffer);
-    if (cursor_visible) {
-        printf(" [CURSOR]");
+    // 7. Выводим в консоль для отладки (опционально)
+    // printf("\rMinibuffer: %s%s", prompt.c_str(), buffer.c_str());
+    // fflush(stdout);
+}
+void render_ibuffer(IBuffer& buffer, int x, int y, int width, int height, int margin) {
+    // 1. Проверяем границы
+    if (x >= SDL_SCREEN_WIDTH || y >= SDL_SCREEN_HEIGHT || 
+        x + width <= 0 || y + height <= 0) {
+        return;
     }
-    fflush(stdout);
+
+    // 2. Рисуем фон
+    for (int buf_y = y; buf_y < y + height && buf_y < SDL_SCREEN_HEIGHT; buf_y++) {
+        if (buf_y >= 0) {
+            for (int buf_x = x; buf_x < x + width && buf_x < SDL_SCREEN_WIDTH; buf_x++) {
+                if (buf_x >= 0) {
+                    screen_buffer[buf_y * SDL_SCREEN_WIDTH + buf_x] = alpha_blend( screen_buffer[buf_y * SDL_SCREEN_WIDTH + buf_x]  , DEBUGGER_BG_COLOR);
+                }
+            }
+        }
+    }
+    
+    // 3. Рисуем рамку
+    // Верхняя и нижняя границы
+    for (int buf_x = x; buf_x < x + width && buf_x < SDL_SCREEN_WIDTH; buf_x++) {
+        if (buf_x >= 0) {
+            if (y >= 0 && y < SDL_SCREEN_HEIGHT) {
+                screen_buffer[y * SDL_SCREEN_WIDTH + buf_x] = IBUF_BORDER_COLOR;
+            }
+            if (y + height - 1 >= 0 && y + height - 1 < SDL_SCREEN_HEIGHT) {
+                screen_buffer[(y + height - 1) * SDL_SCREEN_WIDTH + buf_x] = IBUF_BORDER_COLOR;
+            }
+        }
+    }
+    
+    // Левая и правая границы
+    for (int buf_y = y; buf_y < y + height && buf_y < SDL_SCREEN_HEIGHT; buf_y++) {
+        if (buf_y >= 0) {
+            if (x >= 0 && x < SDL_SCREEN_WIDTH) {
+                screen_buffer[buf_y * SDL_SCREEN_WIDTH + x] = IBUF_BORDER_COLOR;
+            }
+            if (x + width - 1 >= 0 && x + width - 1 < SDL_SCREEN_WIDTH) {
+                screen_buffer[buf_y * SDL_SCREEN_WIDTH + (x + width - 1)] = IBUF_BORDER_COLOR;
+            }
+        }
+    }
+    
+    if (buffer.get_lines_num() == 0) return;
+    
+    // 4. Рассчитываем параметры отображения текста
+    int line_height = 10;
+    int text_area_height = height - 2 * margin;
+    int max_display_lines = text_area_height / line_height;
+    
+    if (max_display_lines <= 0) return;
+    
+    // 5. Устанавливаем visible_lines в буфере в зависимости от доступного места
+    buffer.set_visible_lines(max_display_lines);
+    
+    // 6. Получаем видимые строки из буфера
+    std::string visible_text = buffer.get_visible_lines_text(); // Используем новый метод
+    int display_start_line = buffer.get_display_start_line();
+    
+    // 7. Рисуем строки
+    int current_y = y + margin;
+    int text_x = x + margin;
+    int max_chars = (width - 2 * margin - 50) / 8; // Оставляем место для номера строки
+    
+    std::stringstream ss(visible_text);
+    std::string line;
+    int displayed_lines = 0;
+    
+    while (std::getline(ss, line) && displayed_lines < max_display_lines) {
+        // Номер строки (1-based)
+        int line_number = display_start_line + displayed_lines + 1;
+        
+        // Формируем строку с номером
+        char line_with_num[512];
+        
+        // Обрезаем слишком длинные строки
+        std::string display_line = line;
+        if (display_line.length() > static_cast<size_t>(max_chars - 6)) {
+            display_line = display_line.substr(0, max_chars - 6) + "...";
+        }
+        
+        snprintf(line_with_num, sizeof(line_with_num), "%4d: %s", 
+                 line_number, display_line.c_str());
+        
+        // Рисуем строку
+        draw_text(text_x, current_y, line_with_num, IBUF_TEXT_COLOR);
+        
+        current_y += line_height;
+        displayed_lines++;
+    }
+    
+    // 8. Рисуем scrollbar если нужно
+    int total_lines = static_cast<int>(buffer.get_lines_num());
+    bool show_scrollbar = (total_lines > max_display_lines);
+    
+    if (show_scrollbar) {
+        int scrollbar_width = 6;
+        int scrollbar_x = x + width - margin - scrollbar_width;
+        int scrollbar_area_height = text_area_height;
+        
+        // Вычисляем размер и позицию ползунка
+        float visible_ratio = static_cast<float>(max_display_lines) / total_lines;
+        int thumb_height = static_cast<int>(scrollbar_area_height * visible_ratio);
+        thumb_height = std::max(8, thumb_height);
+        
+        float scroll_ratio = 0.0f;
+        if (total_lines > max_display_lines) {
+            scroll_ratio = static_cast<float>(display_start_line) / 
+                          (total_lines - max_display_lines);
+        }
+        
+        int thumb_y = y + margin + static_cast<int>(scroll_ratio * 
+                   (scrollbar_area_height - thumb_height));
+        
+        // Рисуем фон скроллбара
+        for (int bar_y = y + margin; bar_y < y + margin + scrollbar_area_height && bar_y < y + height; bar_y++) {
+            for (int bar_x = scrollbar_x; bar_x < scrollbar_x + scrollbar_width && bar_x < x + width; bar_x++) {
+                if (bar_x >= 0 && bar_x < SDL_SCREEN_WIDTH && bar_y >= 0 && bar_y < SDL_SCREEN_HEIGHT) {
+                    screen_buffer[bar_y * SDL_SCREEN_WIDTH + bar_x] = 0xFF404040;
+                }
+            }
+        }
+        
+        // Рисуем ползунок
+        for (int bar_y = thumb_y; bar_y < thumb_y + thumb_height && bar_y < y + height; bar_y++) {
+            for (int bar_x = scrollbar_x; bar_x < scrollbar_x + scrollbar_width && bar_x < x + width; bar_x++) {
+                if (bar_x >= 0 && bar_x < SDL_SCREEN_WIDTH && bar_y >= 0 && bar_y < SDL_SCREEN_HEIGHT) {
+                    screen_buffer[bar_y * SDL_SCREEN_WIDTH + bar_x] = 0xFF808080;
+                }
+            }
+        }
+    }
+    
+    // 9. Рисуем заголовок с информацией
+    char header[256];
+    bool at_end = buffer.is_at_end();
+    bool last_visible = buffer.is_last_line_visible();
+    
+    snprintf(header, sizeof(header), "Log: %d-%d/%d", 
+             display_start_line + 1, 
+             display_start_line + displayed_lines, 
+             total_lines);
+    
+    // Добавляем информацию о режиме
+    if (at_end) {
+        strcat(header, " [AUTO]");
+    } else if (last_visible) {
+        strcat(header, " [TAIL]");
+    }
+    
+    // Рисуем заголовок
+    int header_y = y - 15;
+    if (header_y >= 0 && header_y < SDL_SCREEN_HEIGHT) {
+        uint32_t header_color = at_end ? 0xFF00FF00 : 0xFFFFFF00;
+        draw_text(x + margin, header_y, header, header_color);
+    }
 }
 
+
+void render_debugger_with_background(const char* debug_text, 
+                                                    uint32_t* screen_buffer, 
+                                                    int screen_width, 
+                                                    int screen_height) {
+    if (!debug_text || !screen_buffer) return;
+    
+    // 1. Проверяем границы
+    if (DEBUGGER_X >= screen_width || DEBUGGER_Y >= screen_height || 
+        DEBUGGER_X + DEBUGGER_WIDTH <= 0 || DEBUGGER_Y + DEBUGGER_HEIGHT <= 0) {
+        return;
+    }
+    
+    // 2. Рисуем фон
+    for (int y = DEBUGGER_Y; y < DEBUGGER_Y + DEBUGGER_HEIGHT && y < screen_height; y++) {
+        if (y >= 0) {
+            for (int x = DEBUGGER_X; x < DEBUGGER_X + DEBUGGER_WIDTH && x < screen_width; x++) {
+                if (x >= 0) {
+                    screen_buffer[y * screen_width + x] = alpha_blend(screen_buffer[y * screen_width + x] , DEBUGGER_BG_COLOR);
+                }
+            }
+        }
+    }
+    
+    // 3. Рисуем рамку
+    // Верхняя и нижняя границы
+    for (int x = DEBUGGER_X; x < DEBUGGER_X + DEBUGGER_WIDTH && x < screen_width; x++) {
+        if (x >= 0) {
+            if (DEBUGGER_Y >= 0 && DEBUGGER_Y < screen_height) {
+                screen_buffer[DEBUGGER_Y * screen_width + x] = DEBUGGER_BORDER_COLOR;
+            }
+            if (DEBUGGER_Y + DEBUGGER_HEIGHT - 1 >= 0 && 
+                DEBUGGER_Y + DEBUGGER_HEIGHT - 1 < screen_height) {
+                screen_buffer[(DEBUGGER_Y + DEBUGGER_HEIGHT - 1) * screen_width + x] = DEBUGGER_BORDER_COLOR;
+            }
+        }
+    }
+    
+    // Левая и правая границы
+    for (int y = DEBUGGER_Y; y < DEBUGGER_Y + DEBUGGER_HEIGHT && y < screen_height; y++) {
+        if (y >= 0) {
+            if (DEBUGGER_X >= 0 && DEBUGGER_X < screen_width) {
+                screen_buffer[y * screen_width + DEBUGGER_X] = DEBUGGER_BORDER_COLOR;
+            }
+            if (DEBUGGER_X + DEBUGGER_WIDTH - 1 >= 0 && 
+                DEBUGGER_X + DEBUGGER_WIDTH - 1 < screen_width) {
+                screen_buffer[y * screen_width + (DEBUGGER_X + DEBUGGER_WIDTH - 1)] = DEBUGGER_BORDER_COLOR;
+            }
+        }
+    }
+    
+    // 4. Рисуем текст отладчика с отступом
+    int current_x = DEBUGGER_X + DEBUGGER_MARGIN;
+    int current_y = DEBUGGER_Y + DEBUGGER_MARGIN;
+    
+    // Копируем текст для разбивки на строки
+    char buffer_copy[2048];
+    strncpy(buffer_copy, debug_text, sizeof(buffer_copy));
+    buffer_copy[sizeof(buffer_copy) - 1] = '\0';
+    
+    // Разбиваем на строки и рисуем
+    char* line = strtok(buffer_copy, "\n");
+    while (line && current_y < DEBUGGER_Y + DEBUGGER_HEIGHT - DEBUGGER_MARGIN) {
+        draw_text(current_x, current_y, line, DEBUGGER_TEXT_COLOR);
+        current_y += DEBUGGER_LINE_HEIGHT;
+        line = strtok(NULL, "\n");
+    }
+    
+    // 5. Рисуем заголовок
+    const char* header = "Debugger";
+    int header_y = DEBUGGER_Y - 15;
+    if (header_y >= 0 && header_y < screen_height) {
+        draw_text(DEBUGGER_X + DEBUGGER_MARGIN, header_y, header, 0xFF00FF00);
+    }
+}
 // Главная функция update_screen
 void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenMode mode, Debugger *dbg)
 {
@@ -319,28 +617,24 @@ void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenM
     static char debug_display_buffer[2048];
     debugger_render_to_buffer(dbg, cpu, memory, debug_display_buffer, sizeof(debug_display_buffer));
     
-    // 4. Рендеринг текста на экран (но оставляем место для мини-буфера!)
-    int x = 10, y = 10;
-    char buffer_copy[2048];
-    strncpy(buffer_copy, debug_display_buffer, sizeof(buffer_copy));
+    // 4. Отрисовка отладчика с фоном и рамкой
+    render_debugger_with_background(debug_display_buffer, 
+                                                   screen_buffer, 
+                                                   SDL_SCREEN_WIDTH, 
+                                                   SDL_SCREEN_HEIGHT);
     
-    char *line = strtok(buffer_copy, "\n");
-    while (line && y < SDL_SCREEN_HEIGHT - 50) { // Оставляем 50 пикселей для мини-буфера!
-        draw_text(x, y, line, 0xFFFFFFFF);
-        y += 10;
-        line = strtok(NULL, "\n");
+    // 5. Отрисовка мини-буфера
+    if (minibuffer.is_visible()) {
+        minibuffer_draw(minibuffer, renderer, window);
     }
     
-    // 5. Отрисовка мини-буфера (он рисует прямо в screen_buffer)
-    extern Minibuffer minibuf; // Объявляем глобальную переменную
-    if (minibuf.visible) {
-        minibuffer_draw(&minibuf, renderer, window);
-    }
-    
-    // 6. Обновляем SDL текстуру из screen_buffer
+    // 6. Отрисовка лог-буфера
+    render_ibuffer(ibuffer, IBUF_X, IBUF_Y, IBUF_W, IBUF_H, IBUF_MARGIN);
+  
+    // 7. Обновляем SDL текстуру из screen_buffer
     SDL_UpdateTexture(texture, NULL, screen_buffer, SDL_SCREEN_WIDTH * sizeof(uint32_t));
     
-    // 7. Очищаем рендерер и рисуем текстуру
+    // 8. Очищаем рендерер и рисуем текстуру
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);

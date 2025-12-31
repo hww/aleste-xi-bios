@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "ports.h"
 #include "mmu_native.h"
-#include "bus.h"
+#include "globals.h"
 #include "palette.h"
 
 NativeMMU g_mmu;
