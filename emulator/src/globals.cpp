@@ -1,6 +1,6 @@
 #include "globals.h"
-#include "render/minibuffer.h"
-#include "render/ibuffer.h"
+#include "utils/minibuffer.h"
+#include "utils/ibuffer.h"
 #include "cli.h"
 
 

@@ -11,41 +11,13 @@
 #include "ports.h"
 #include "globals.h"
 #include "cli.h"
-#include "render/minibuffer.h"
-#include "render/ibuffer.h"
+#include "utils/minibuffer.h"
+#include "utils/ibuffer.h"
+#include "commands.h"
 
 // Глобальные переменные
 Debugger debugger;
 Z80EX_CONTEXT *cpu = NULL;
-
-
-void print_help(void) {
-    ibuffer.printf("\n=== Z80 DEBUGGER COMMANDS ===\n");
-    ibuffer.printf("  r        - Run (continuous execution)\n");
-    ibuffer.printf("  t        - Trace (execute with pauses)\n");
-    ibuffer.printf("  p        - Pause execution\n");
-    ibuffer.printf("  s        - Step (execute one instruction)\n");
-    ibuffer.printf("  b <addr> - Set breakpoint at address\n");
-    ibuffer.printf("  d <addr> - Remove breakpoint at address\n");
-    ibuffer.printf("  m <addr> [len] - Dump memory\n");
-    ibuffer.printf("  dis <start> <end> - Disassemble memory range\n");
-    ibuffer.printf("  reg      - Show registers\n");
-    ibuffer.printf("  stat     - Show debugger status\n");
-    ibuffer.printf("  h        - Show this help\n");
-    ibuffer.printf("  q        - Quit\n");
-    ibuffer.printf("\nMINIBUFFER KEYS:\n");
-    ibuffer.printf("  Alt+X    - Toggle minibuffer\n");
-    ibuffer.printf("  ESC      - Close minibuffer\n");
-    ibuffer.printf("  ENTER    - Execute command\n");
-    ibuffer.printf("  INS      - Toggle insert/overwrite mode\n");
-    ibuffer.printf("\nDEBUGGER HOTKEYS:\n");
-    ibuffer.printf("  SPACE    - Toggle run/pause\n");
-    ibuffer.printf("  S        - Single step\n");
-    ibuffer.printf("  R        - Run\n");
-    ibuffer.printf("  T        - Trace mode\n");
-    ibuffer.printf("  ESC      - Quit\n");
-    ibuffer.printf("================================\n");
-}
 
 const char* debugger_mode_to_str(int mode) {
     switch (mode) {
@@ -54,105 +26,6 @@ const char* debugger_mode_to_str(int mode) {
         case DEBUG_MODE_STEP: return "STEP";
         case DEBUG_MODE_TRACE: return "TRACE";
         default: return "UNKNOWN";
-    }
-}
-
-void handle_command(const char *cmd) {
-    if (!cmd || strlen(cmd) == 0) return;
-    
-    ibuffer.printf("Executing command: %s\n", cmd);
-    
-    char command[64];
-    uint16_t arg1 = 0, arg2 = 0;
-    
-    if (sscanf(cmd, "%s %hx %hx", command, &arg1, &arg2) < 1) {
-        return;
-    }
-    
-    if (strcmp(command, "r") == 0) {
-        debugger_run(&debugger);
-        ibuffer.printf("Running... (press SPACE to pause)\n");
-    }
-    else if (strcmp(command, "t") == 0) {
-        debugger_trace(&debugger);
-        ibuffer.printf("Tracing...\n");
-    }
-    else if (strcmp(command, "p") == 0) {
-        debugger_pause(&debugger);
-        ibuffer.printf("Paused.\n");
-    }
-    else if (strcmp(command, "s") == 0) {
-        debugger_step(&debugger);
-        ibuffer.printf("Stepping...\n");
-    }
-    else if (strcmp(command, "b") == 0) {
-        if (arg1 != 0) {
-            if (debugger_add_breakpoint(&debugger, arg1, "User breakpoint")) {
-                ibuffer.printf("Breakpoint set at %04X\n", arg1);
-            } else {
-                ibuffer.printf("Failed to set breakpoint\n");
-            }
-        } else {
-            ibuffer.printf("Usage: b <address>\n");
-        }
-    }
-    else if (strcmp(command, "d") == 0) {
-        if (arg1 != 0) {
-            if (debugger_remove_breakpoint(&debugger, arg1)) {
-                ibuffer.printf("Breakpoint removed at %04X\n", arg1);
-            } else {
-                ibuffer.printf("Breakpoint not found at %04X\n", arg1);
-            }
-        } else {
-            ibuffer.printf("Usage: d <address>\n");
-        }
-    }
-    else if (strcmp(command, "lb") == 0) {
-        char buffer[512];
-        debugger_list_breakpoints(&debugger, buffer, sizeof(buffer));
-        ibuffer.printf("%s", buffer);
-    }
-    else if (strcmp(command, "m") == 0) {
-        if (arg1 != 0) {
-            uint16_t len = (arg2 != 0) ? arg2 : 256;
-            char buffer[2048];
-            debugger_memory_dump(memory, arg1, len, buffer, sizeof(buffer));
-            ibuffer.printf("%s", buffer);
-        } else {
-            ibuffer.printf("Usage: m <address> [length]\n");
-        }
-    }
-    else if (strcmp(command, "dis") == 0) {
-        if (arg1 != 0) {
-            uint16_t end = (arg2 != 0) ? arg2 : (arg1 + 128);
-            char buffer[2048];
-            debugger_disassemble_range(memory, arg1, end, buffer, sizeof(buffer));
-            ibuffer.printf("%s", buffer);
-        } else {
-            ibuffer.printf("Usage: dis <start> <end>\n");
-        }
-    }
-    else if (strcmp(command, "reg") == 0) {
-        char buffer[256];
-        debugger_print_registers(cpu, buffer, sizeof(buffer));
-        printf("%s\n", buffer);
-    }
-    else if (strcmp(command, "stat") == 0) {
-        char buffer[256];
-        debugger_print_status(&debugger, cpu, buffer, sizeof(buffer));
-        ibuffer.printf("%s\n", buffer);
-    }
-    else if (strcmp(command, "h") == 0) {
-        print_help();
-    }
-    else if (strcmp(command, "q") == 0) {
-        ibuffer.printf("Quitting...\n");
-        SDL_Event quit_event;
-        quit_event.type = SDL_QUIT;
-        SDL_PushEvent(&quit_event);
-    }
-    else {
-        cli.execute(command);
     }
 }
 
@@ -201,16 +74,18 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
+    // Инициализация команд дебаггера
+    init_debugger_commands(&debugger, cpu, memory);
+    
     // Установка начального состояния CPU
-    // PC = 0x0000 для большинства Z80 систем
     z80ex_set_reg(cpu, regPC, 0x0000);
     
     ibuffer.printf("Z80 Emulator with Debugger started\n");
     ibuffer.printf("Loaded BIOS from %s (%zu bytes)\n", argv[1], bytes_read);
     ibuffer.printf("CPU initialized, PC = 0x%04X\n", z80ex_get_reg(cpu, regPC));
-    print_help();
     
-
+    // Показываем справку по командам
+    cli.execute("help");
 
     // Главный цикл
     bool quit = false;
@@ -232,8 +107,9 @@ int main(int argc, char *argv[]) {
             if (minibuffer.is_visible()) {
                 // Обработка событий мини-буфера
                 if (minibuffer.handle_event(e)) {
-                    const char *cmd = minibuffer.get_text().c_str();
-                    handle_command(cmd);
+                    auto cmds = minibuffer.get_text();
+                    const char *cmd = cmds.c_str();
+                    cli.execute(cmd);
                     minibuffer.hide();
                     minibuffer.clear();
                 }
@@ -270,7 +146,7 @@ int main(int argc, char *argv[]) {
                             
                         case SDLK_t:
                             debugger_trace(&debugger);
-                            printf("Debugger: Trace mode\n");
+                            ibuffer.printf("Debugger: Trace mode\n");
                             break;
                             
                         case SDLK_SPACE:
@@ -316,7 +192,7 @@ int main(int argc, char *argv[]) {
                             break;
                             
                         case SDLK_h:
-                            print_help();
+                            cli.execute("help");
                             break;
 
                         case SDLK_PAGEUP:

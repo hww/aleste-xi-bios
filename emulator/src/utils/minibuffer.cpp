@@ -92,9 +92,7 @@ bool Minibuffer::handle_event(const SDL_Event& event) {
         add_to_history(buffer_);
         commands_executed_++;
         
-        // Автоматически скрываем после выполнения
-        hide();
-        clear();
+
     }
     
     return command_complete;
@@ -342,7 +340,18 @@ void Minibuffer::handle_key_down(const SDL_KeyboardEvent& key) {
 }
 
 void Minibuffer::handle_text_input(const SDL_TextInputEvent& text) {
-    insert_text(text.text);
+    // Проверяем, не превысит ли вставка максимальный размер
+    if (buffer_.length() + strlen(text.text) > max_size_) {
+        // Рассчитываем, сколько символов можно вставить
+        size_t available = max_size_ - buffer_.length();
+        if (available > 0) {
+            // Вставляем только то, что помещается
+            std::string truncated(text.text, available);
+            insert_text(truncated);
+        }
+    } else {
+        insert_text(text.text);
+    }
 }
 
 void Minibuffer::handle_alt_key(int key) {

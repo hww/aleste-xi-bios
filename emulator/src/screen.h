@@ -9,7 +9,7 @@
 
 #include "debugger.h"
 #include "ports.h"
-#include "render/text_colors.h"
+#include "utils/text_colors.h"
 
 
 #define SDL_SCREEN_WIDTH  (640)

@@ -4,8 +4,8 @@
 #include <stdarg.h>
 #include <z80ex.h>
 #include <z80ex_dasm.h>
-#include "render/text_colors.h"
-#include "render/buffer_printer.h"
+#include "utils/text_colors.h"
+#include "utils/buffer_printer.h"
 #include "ports.h"
 
 // Функция для чтения байта (для дизассемблера)

@@ -12,8 +12,8 @@
 #include "debugger.h"
 #include "palette.h"
 #include "ports.h"
-#include "render/minibuffer.h"
-#include "render/ibuffer.h"
+#include "utils/minibuffer.h"
+#include "utils/ibuffer.h"
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;

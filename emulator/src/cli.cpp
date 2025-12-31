@@ -2,11 +2,14 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
-#include <stdint.h>
+#include <sstream>
 #include <iomanip>
+#include <stdint.h>
+#include "globals.h"
+#include "utils/ibuffer.h"
 
 CLI::CLI() {
-    // Регистрируем встроенные команды
+    // Регистрируем только базовые команды CLI
     register_command("help", "Show help", 
                     [this](const auto& args) { cmd_help(args); });
     register_command("?", "Show help (short)", 
@@ -30,7 +33,6 @@ void CLI::register_command(const std::string& name,
     cmd.handler = handler;
     commands_[name] = cmd;
 }
-
 
 std::vector<std::string> CLI::parse_args(const std::string& line) {
     std::vector<std::string> args;
@@ -70,8 +72,8 @@ bool CLI::execute(const std::string& line) {
         }
         
         if (it == commands_.end()) {
-            std::cout << "Unknown command: " << cmd_name << std::endl;
-            std::cout << "Type 'help' for available commands" << std::endl;
+            ibuffer.printf("Unknown command: %s\n", cmd_name);
+            ibuffer.printf("Type 'help' for available commands\n");
             return false;
         }
     }
@@ -83,7 +85,7 @@ bool CLI::execute(const std::string& line) {
         it->second.handler(args);
         return true;
     } catch (const std::exception& e) {
-        std::cout << "Error executing command: " << e.what() << std::endl;
+        ibuffer.printf("Error executing command: %s\n", e.what());
         return false;
     }
 }
@@ -92,12 +94,10 @@ std::vector<std::string> CLI::autocomplete(const std::string& prefix) {
     std::vector<std::string> matches;
     
     if (prefix.empty()) {
-        // Все команды
         for (const auto& [name, cmd] : commands_) {
             matches.push_back(name);
         }
     } else {
-        // Команды, начинающиеся с префикса
         for (const auto& [name, cmd] : commands_) {
             if (name.find(prefix) == 0) {
                 matches.push_back(name);
@@ -109,33 +109,28 @@ std::vector<std::string> CLI::autocomplete(const std::string& prefix) {
 }
 
 void CLI::show_help() {
-    std::cout << "Available commands:" << std::endl;
-    std::cout << "==================" << std::endl;
-    
+    ibuffer.printf("Available commands:\n");;
+    ibuffer.printf("==================\n");
+
     for (const auto& [name, cmd] : commands_) {
-        std::cout << "  " << name;
-        if (!cmd.help.empty()) {
-            std::cout << " - " << cmd.help;
-        }
-        std::cout << std::endl;
+        ibuffer.printf("  %s - %s\n",  name, cmd.help);
     }
 }
 
 void CLI::show_command_help(const std::string& command) {
     auto it = commands_.find(command);
     if (it != commands_.end()) {
-        std::cout << "Command: " << it->second.name << std::endl;
-        std::cout << "Usage: " << it->second.name << std::endl;
-        std::cout << "Description: " << it->second.help << std::endl;
+        ibuffer.printf("Command: %s\n", it->second.name);
+        ibuffer.printf("Description: %s\n", it->second.help);
     } else {
-        std::cout << "Unknown command: " << command << std::endl;
+        ibuffer.printf("Unknown command: %s\n", command);
     }
 }
 
 void CLI::add_to_history(const std::string& command) {
     history_.push_back(command);
     
-    // Ограничиваем историю (например, 100 команд)
+    // Ограничиваем историю
     if (history_.size() > 100) {
         history_.erase(history_.begin());
     }
@@ -156,16 +151,15 @@ void CLI::cmd_help(const std::vector<std::string>& args) {
 }
 
 void CLI::cmd_clear(const std::vector<std::string>& args) {
-    // Простой способ очистки экрана
     std::cout << "\033[2J\033[1;1H";  // ANSI escape codes
 }
 
 void CLI::cmd_history(const std::vector<std::string>& args) {
-    std::cout << "Command history:" << std::endl;
-    std::cout << "================" << std::endl;
+    ibuffer.printf("Command history:\n");
+    ibuffer.printf("================\n");
     
     for (size_t i = 0; i < history_.size(); ++i) {
-        std::cout << "  " << i + 1 << ": " << history_[i] << std::endl;
+        ibuffer.printf("  %d %s\n", i + 1, history_[i]);
     }
 }
 
@@ -176,32 +170,29 @@ void CLI::cmd_echo(const std::vector<std::string>& args) {
     std::cout << std::endl;
 }
 
+// === CLIUtils ===
 
-
-// Проверка, является ли строка hex числом
 bool CLIUtils::is_hex(const std::string& s) {
     if (s.empty()) return false;
+    
+    // Проверяем префикс 0x
+    size_t start = 0;
     if (s.length() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-        // Формат 0x...
-        for (size_t i = 2; i < s.length(); ++i) {
-            if (!isxdigit(s[i])) return false;
-        }
-        return true;
-    } else {
-        // Просто hex без префикса
-        for (char c : s) {
-            if (!isxdigit(c)) return false;
-        }
-        return true;
+        start = 2;
     }
+    
+    // Проверяем остальные символы
+    for (size_t i = start; i < s.length(); ++i) {
+        if (!isxdigit(s[i])) return false;
+    }
+    
+    return true;
 }
 
-// Конвертация hex строки в число
 uint32_t CLIUtils::hex_to_int(const std::string& s) {
     return std::stoul(s, nullptr, 16);
 }
 
-// Форматирование числа в hex
 std::string CLIUtils::int_to_hex(uint32_t value, int width) {
     std::stringstream ss;
     ss << std::hex << std::uppercase << std::setfill('0') << std::setw(width) << value;

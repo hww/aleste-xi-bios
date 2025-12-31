@@ -1,5 +1,5 @@
 #include "palette.h"
-#include "hex_dump.h"
+#include "utils/hex_dump.h"
 #include "globals.h"
 
 void Palette::reset() {

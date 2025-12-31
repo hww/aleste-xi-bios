@@ -15,14 +15,14 @@ SRCS = src/main.cpp \
 	src/ports.cpp \
 	src/mmu_native.cpp \
 	src/palette.cpp \
-	src/hex_dump.cpp \
-	src/render/buffer_printer.cpp \
-	src/render/minibuffer.cpp \
-	src/render/ibuffer.cpp \
+	src/utils/hex_dump.cpp \
+	src/utils/buffer_printer.cpp \
+	src/utils/minibuffer.cpp \
+	src/utils/ibuffer.cpp \
 	src/globals.cpp \
 	src/cli.cpp \
 	src/commands.cpp
-	
+
 
 # Объектные файлы (меняем src/ на obj/)
 OBJS = $(SRCS:src/%.cpp=obj/%.o)
