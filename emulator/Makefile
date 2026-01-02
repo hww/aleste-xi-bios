@@ -12,6 +12,7 @@ SRCS = src/main.cpp \
 	src/debugger.cpp \
 	src/screen.cpp \
 	src/memory.cpp \
+	src/crtc.cpp \
 	src/ports.cpp \
 	src/mmu_native.cpp \
 	src/palette.cpp \
@@ -43,17 +44,14 @@ obj/%.o: src/%.cpp
 	$(CXX) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf obj/* ../bin/*
+	rm -rf obj/* ../bin/* ./src/*.o ./src/utils/*.o ./*.o
 
 run: all
+	test/build.sh 
 	../bin/z80_emu test/test.bin
 
 debug: all
 	gdb --args ../bin/z80_emu test/test.bin
 
-# Для тестирования
-run-test: all
-	test/build.sh 
-	../bin/z80_emu test/test.bin
 
 .PHONY: all clean run debug run-test

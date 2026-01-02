@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <array>
 #include <functional>
-#include "globals.h"
+
+#include "forward_decl.h"
+
 
 class Palette {
 private:

@@ -73,8 +73,7 @@
         else if (cycle == ECycle::MWR || cycle == ECycle::MRD) {
             // Для памяти MMU не обрабатывает данные напрямую
             // но обновляет состояние если нужно
-            handle_memory_access(addr, cycle);
-            result = 0x00;
+            result = handle_memory_access(addr, cycle, data_in);
         }
         
         return result;
@@ -84,7 +83,7 @@
     uint32_t NativeMMU::translate_address(uint16_t addr, ECycle cycle) const {
         if (cycle == ECycle::IOWR || cycle == ECycle::IORD) {
             // IO доступ
-            if (native_mode) {
+
                 if ((addr & 0xFF) < 0xC0) {
                     // MMIO доступ
                     return (0xFF000000 | (reg_mmio_page << 8) | (addr & 0xFF));
@@ -92,13 +91,10 @@
                     // Обычный IO
                     return (0xFF000000 | addr);
                 }
-            } else {
-                // Legacy mode
-                return 0xFF000000 | addr;
-            }
+
         } else {
             // Доступ к памяти
-            if (native_mode) {
+
 
                 uint8_t slot = get_current_slot(addr, cycle);
                 uint8_t bank = get_current_bank(addr, cycle);
@@ -107,10 +103,7 @@
                 return ((slot & 0x03) << 22) | 
                        (bank << 14) | 
                        (addr & 0x3FFF);
-            } else {
-                // Legacy mode: прямое отображение
-                return addr;
-            }
+
         }
     }
 
@@ -139,6 +132,10 @@
         } else {
             page = (addr >> 14) & 0x03; // Для памяти: биты A[15:14]
         }
+        return get_current_slot_for_page(page);
+    }
+    
+    uint8_t NativeMMU::get_current_slot_for_page(uint8_t page) const {
         
         uint8_t slot_reg = supervisor_mode ? reg_super_slot : reg_user_slot;
         
@@ -150,7 +147,7 @@
             default: return 0;
         }
     }
-    
+
     // Получить индекс маппера
     uint8_t NativeMMU::get_mapper_index(uint8_t current_slot, uint16_t addr, ECycle cycle) const {
         uint8_t page;
@@ -176,17 +173,7 @@
             }
             return;
         }
-        
-        // Для других регистров MMU
-        if (native_mode) {
-            // Native mode: младшие 5 бит адреса
-            uint8_t reg_addr = addr & 0x1F;
-            handle_native_register_write(reg_addr, data);
-        } else {
-            // Legacy mode: старший байт адреса
-            uint8_t reg_addr = (addr >> 8) & 0xFF;
-            handle_legacy_register_write(reg_addr, data);
-        }
+        handle_native_register_write(addr, data);
     }
     
     // Обработка чтения из IO порта
@@ -198,28 +185,34 @@
         }
         
         // Для других регистров MMU
-        if (native_mode) {
-            uint8_t reg_addr = addr & 0x1F;
-            return handle_native_register_read(reg_addr);
-        } else {
-            uint8_t reg_addr = (addr >> 8) & 0xFF;
-            return handle_legacy_register_read(reg_addr);
-        }
+        return handle_native_register_read(addr);
     }
     
     // Обработка доступа к памяти
-    void NativeMMU::handle_memory_access(uint16_t addr, ECycle cycle) {
+    uint8_t NativeMMU::handle_memory_access(uint16_t addr, ECycle cycle, uint8_t data_in) {
         // Для M1 циклов проверяем выход из supervisor mode
         if (cycle == ECycle::OPCODE && supervisor_exit_pending) {
             supervisor_mode = false;
             supervisor_exit_pending = false;
         }
+        auto address = translate_address(addr, cycle);
+        switch (cycle)
+        {
+        case ECycle::MWR:
+            memory[address] = data_in;
+            return 0xFF;
+        case ECycle::MRD:
+            return memory[address];
+        default:
+            break;
+        }
+        return 0xFF;   
     }
     
     // Обработка записи регистров в Native mode
     void NativeMMU::handle_native_register_write(uint8_t reg_addr, uint8_t data) {
         // Получаем текущий слот для записи
-        uint8_t current_slot = get_current_slot(0, ECycle::IOWR); // Используем адрес 0 для получения слотов
+        uint8_t current_slot = get_current_slot_for_page(reg_addr & 3); 
         
         switch (reg_addr) {
             case 0xF0: // CONTROL
@@ -264,8 +257,8 @@
                 
             default:
                 // Расширенные регистры E0-EF
-                if (reg_addr < 0x10) {
-                    reg_bank[reg_addr] = data;
+                if (reg_addr >= 0xE0 && reg_addr <= 0xEF) {
+                    reg_bank[reg_addr&0x0f] = data;
                 }
                 break;
         }
@@ -288,46 +281,11 @@
             case 0xFE: return reg_bank[(current_slot << 2) | 2];
             case 0xFF: return reg_bank[(current_slot << 2) | 3];
             default:
-                if (reg_addr < 0x10) {
-                    return reg_bank[reg_addr];
+                if (reg_addr >= 0xE0 && reg_addr <= 0xEF) {
+                    return reg_bank[reg_addr & 0x0f];
                 }
                 return 0xFF;
         }
+        return 0xFF;
     }
     
-    // Обработка записи регистров в Legacy mode
-    void NativeMMU::handle_legacy_register_write(uint8_t reg_addr, uint8_t data) {
-        // Аналогично Native mode, но с другими адресами
-        uint8_t current_slot = get_current_slot(0, ECycle::IOWR);
-        
-        switch (reg_addr) {
-            case 0xF0: reg_control = data; break;
-            case 0xF1: reg_mmio_page = data; break;
-            case 0xF3: reg_clock = data; break;
-            case 0xFA: reg_super_slot = data; break;
-            case 0xFB: reg_user_slot = data; break;
-            case 0xFC: reg_bank[(current_slot << 2) | 0] = data; break;
-            case 0xFD: reg_bank[(current_slot << 2) | 1] = data; break;
-            case 0xFE: reg_bank[(current_slot << 2) | 2] = data; break;
-            case 0xFF: reg_bank[(current_slot << 2) | 3] = data; break;
-        }
-    }
-    
-    // Обработка чтения регистров в Legacy mode
-    uint8_t NativeMMU::handle_legacy_register_read(uint8_t reg_addr) const {
-        uint8_t current_slot = get_current_slot(0, ECycle::IORD);
-        
-        switch (reg_addr) {
-            case 0xF0: return reg_control;
-            case 0xF1: return reg_mmio_page;
-            case 0xF2: return reg_syscall_function;
-            case 0xF3: return reg_clock;
-            case 0xFA: return reg_super_slot;
-            case 0xFB: return reg_user_slot;
-            case 0xFC: return reg_bank[(current_slot << 2) | 0];
-            case 0xFD: return reg_bank[(current_slot << 2) | 1];
-            case 0xFE: return reg_bank[(current_slot << 2) | 2];
-            case 0xFF: return reg_bank[(current_slot << 2) | 3];
-            default: return 0xFF;
-        }
-    }

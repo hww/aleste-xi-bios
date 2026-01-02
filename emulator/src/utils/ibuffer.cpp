@@ -324,7 +324,8 @@ void IBuffer::add_line(const std::string& line) {
     size_t line_size = line.length() + 1;
     
     bool was_at_end = is_at_end();
-    std::cout << "IBuffer::add_line (" << line << ")" << std::endl;
+    if (line.size() > 0)
+        std::cout << "IBuffer::add_line(\"" << line << "\")" << std::endl;
     
     // Проверяем, поместится ли новая строка
     while (!lines_.empty() && current_size_ + line_size > max_size_) {

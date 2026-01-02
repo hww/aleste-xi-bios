@@ -12,6 +12,7 @@
 #include "debugger.h"
 #include "palette.h"
 #include "ports.h"
+#include "globals.h"
 #include "utils/minibuffer.h"
 #include "utils/ibuffer.h"
 
@@ -265,7 +266,7 @@ void minibuffer_draw(Minibuffer &mb, SDL_Renderer *renderer, SDL_Window *window)
     // 2. Рисуем фон мини-буфера в screen_buffer
     for (int y = minibuf_screen_y; y < SDL_SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
-            screen_buffer[y * SDL_SCREEN_WIDTH + x] = 0xFF303040; // Темно-синий
+            screen_buffer[y * SDL_SCREEN_WIDTH + x] = alpha_blend(screen_buffer[y * SDL_SCREEN_WIDTH + x]  , MINIBBUF_BG_COLOR); // Темно-синий
         }
     }
     
@@ -273,7 +274,7 @@ void minibuffer_draw(Minibuffer &mb, SDL_Renderer *renderer, SDL_Window *window)
     // Верхняя граница
     for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
         if (minibuf_screen_y > 0 && minibuf_screen_y < SDL_SCREEN_HEIGHT) {
-            screen_buffer[minibuf_screen_y * SDL_SCREEN_WIDTH + x] = 0xFF505078;
+            screen_buffer[minibuf_screen_y * SDL_SCREEN_WIDTH + x] = MINIBBUF_BORDER_COLOR;
         }
     }
     
@@ -281,7 +282,7 @@ void minibuffer_draw(Minibuffer &mb, SDL_Renderer *renderer, SDL_Window *window)
     int bottom_line = SDL_SCREEN_HEIGHT - 1;
     if (bottom_line >= 0 && bottom_line < SDL_SCREEN_HEIGHT) {
         for (int x = 0; x < SDL_SCREEN_WIDTH; x++) {
-            screen_buffer[bottom_line * SDL_SCREEN_WIDTH + x] = 0xFF505078;
+            screen_buffer[bottom_line * SDL_SCREEN_WIDTH + x] = MINIBBUF_BORDER_COLOR;
         }
     }
     
@@ -290,11 +291,11 @@ void minibuffer_draw(Minibuffer &mb, SDL_Renderer *renderer, SDL_Window *window)
         if (y >= 0 && y < SDL_SCREEN_HEIGHT) {
             // Левая граница
             if (0 < SDL_SCREEN_WIDTH) {
-                screen_buffer[y * SDL_SCREEN_WIDTH] = 0xFF505078;
+                screen_buffer[y * SDL_SCREEN_WIDTH] = MINIBBUF_BORDER_COLOR;
             }
             // Правая граница
             if (SDL_SCREEN_WIDTH - 1 >= 0) {
-                screen_buffer[y * SDL_SCREEN_WIDTH + (SDL_SCREEN_WIDTH - 1)] = 0xFF505078;
+                screen_buffer[y * SDL_SCREEN_WIDTH + (SDL_SCREEN_WIDTH - 1)] = MINIBBUF_BORDER_COLOR;
             }
         }
     }
@@ -352,17 +353,15 @@ void minibuffer_draw(Minibuffer &mb, SDL_Renderer *renderer, SDL_Window *window)
     }
     
     // 5. Рисуем текст мини-буфера
-    draw_text(MINIBBUF_MARGIN_X, minibuf_screen_y + MINIBBUF_MARGIN_Y, display_buffer, 0xFFFFFFFF);
+    draw_text(MINIBBUF_MARGIN_X, minibuf_screen_y + MINIBBUF_MARGIN_Y, display_buffer, MINIBBUF_TEXT_COLOR);
     
     // 6. Рисуем режим [INS]/[OVR] справа
     char mode_str[20];
     snprintf(mode_str, sizeof(mode_str), "[%s]", mb.is_overwrite_mode() ? "OVR" : "INS");
-    draw_text(SDL_SCREEN_WIDTH - 60, minibuf_screen_y + MINIBBUF_MARGIN_Y, mode_str, 0xFFFFFF00);
-    
-    // 7. Выводим в консоль для отладки (опционально)
-    // printf("\rMinibuffer: %s%s", prompt.c_str(), buffer.c_str());
-    // fflush(stdout);
+    draw_text(SDL_SCREEN_WIDTH - 60, minibuf_screen_y + MINIBBUF_MARGIN_Y, mode_str, MINIBBUF_TEXT_COLOR);
 }
+
+
 void render_ibuffer(IBuffer& buffer, int x, int y, int width, int height, int margin) {
     // 1. Проверяем границы
     if (x >= SDL_SCREEN_WIDTH || y >= SDL_SCREEN_HEIGHT || 
@@ -593,11 +592,11 @@ void render_debugger_with_background(const char* debug_text,
     const char* header = "Debugger";
     int header_y = DEBUGGER_Y - 15;
     if (header_y >= 0 && header_y < screen_height) {
-        draw_text(DEBUGGER_X + DEBUGGER_MARGIN, header_y, header, 0xFF00FF00);
+        draw_text(DEBUGGER_X + DEBUGGER_MARGIN, header_y, header, DEBUGGER_HDR_TEXT_COLOR ); 
     }
 }
 // Главная функция update_screen
-void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenMode mode, Debugger *dbg)
+void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenMode mode)
 {
     if (!cpu || !memory) return;
     
@@ -605,8 +604,8 @@ void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenM
     memset(screen_buffer, 0, SDL_SCREEN_WIDTH * SDL_SCREEN_HEIGHT * sizeof(uint32_t));
     
     // 2. Графика из памяти Z80
-    switch (mode) {
-        case EScreenMode_Linear16k1b:
+    switch (mode) { 
+        case EScreenMode::Linear16k1b:
             update_screen_16k1b(cpu, memory, start);
             break;
         default:
@@ -614,11 +613,10 @@ void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenM
     }
     
     // 3. Генерация текста отладчика
-    static char debug_display_buffer[2048];
-    debugger_render_to_buffer(dbg, cpu, memory, debug_display_buffer, sizeof(debug_display_buffer));
+    auto str = debugger.render_to_buffer(cpu, memory);
     
     // 4. Отрисовка отладчика с фоном и рамкой
-    render_debugger_with_background(debug_display_buffer, 
+    render_debugger_with_background(str.c_str(), 
                                                    screen_buffer, 
                                                    SDL_SCREEN_WIDTH, 
                                                    SDL_SCREEN_HEIGHT);

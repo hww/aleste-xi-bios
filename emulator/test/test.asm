@@ -1,6 +1,15 @@
 ORG 0x0000
 
 start:
+    ld a, 0x00
+    out (0xFC),a
+    ld a, 0x01
+    out (0xFD),a
+    ld a, 0x02
+    out (0xFE),a
+    ld a, 0x03
+    out (0xFF),a
+    
     ld a, 0x01        ; Начинаем с бита 0 (00000001b)
 
 main_loop:

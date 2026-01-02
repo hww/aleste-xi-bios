@@ -102,3 +102,6 @@ debug_vbuf: prepare
 	@grep -n "P" $(BUILD_DIR)/vbuf.i || echo "Символ P не найден в препроцессорном файле"
 clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
+
+run: $(TARGET).bin
+	bin/z80_emu ../output/aleste.bin

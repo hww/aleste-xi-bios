@@ -1,20 +1,22 @@
-#ifndef _DEBUGGER_H_
-#define _DEBUGGER_H_
+#ifndef DEBUGGER_HPP
+#define DEBUGGER_HPP
 
 #include <z80ex.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+#include <cstddef>
+#include <string>
+#include <array>
 
 // Режимы работы дебаггера
-typedef enum {
-    DEBUG_MODE_RUN,      // Беспрерывное исполнение
-    DEBUG_MODE_TRACE,    // Исполнение с паузами (трассировка)
-    DEBUG_MODE_STEP,     // Пошаговое исполнение
-    DEBUG_MODE_PAUSE     // Пауза
-} DebugMode;
+enum class DebugMode {
+    RUN,      // Беспрерывное исполнение
+    TRACE,    // Исполнение с паузами (трассировка)
+    STEP,     // Пошаговое исполнение
+    PAUSE     // Пауза
+};
 
 // Структура для хранения состояния процессора
-typedef struct {
+struct CPUState {
     // Регистры
     uint16_t pc;
     uint16_t sp;
@@ -25,79 +27,109 @@ typedef struct {
     uint8_t iff1, iff2;
     
     // Дизассемблированная инструкция
-    char instruction[32];
+    std::array<char, 32> instruction;
     
     // Флаги
     struct {
         uint8_t s:1, z:1, y:1, h:1, x:1, p:1, n:1, c:1;
     } flags;
-} CPUState;
+
+    int len;
+    
+    CPUState();
+};
 
 // Структура точки останова
-typedef struct {
+struct Breakpoint {
     uint16_t address;
     bool enabled;
-    char description[32];
-} Breakpoint;
+    std::array<char, 32> description;
+    
+    Breakpoint();
+    Breakpoint(uint16_t addr, const std::string& desc = "");
+};
 
-// Главная структура дебаггера
-typedef struct {
-    DebugMode mode;
+// Главный класс дебаггера
+class Debugger {
+private:
+    DebugMode mode_;
     
     // Точки останова
-    Breakpoint breakpoints[16];
-    int breakpoint_count;
+    std::array<Breakpoint, 16> breakpoints_;
+    size_t breakpoint_count_;
     
     // История исполнения (кольцевой буфер)
-    CPUState history[10];
-    int history_index;
-    int history_count;
+    std::array<CPUState, 10> history_;
+    size_t history_index_;
+    size_t history_count_;
     
     // Флаги состояния
-    bool should_update_screen;
-    int trace_delay_ms;
+    bool should_update_screen_;
+    int trace_delay_ms_;
     
     // Статистика
-    uint64_t total_cycles;
-    uint64_t instruction_count;
-} Debugger;
+    uint64_t total_cycles_;
+    uint64_t instruction_count_;
+    
+public:
+    Debugger();
+    
+    // Управление исполнением
+    void run();
+    void trace();
+    void pause();
+    void step();
+    
+    // Точки останова
+    bool add_breakpoint(uint16_t address, const std::string& desc = "");
+    bool remove_breakpoint(uint16_t address);
+    std::string list_breakpoints() const;
+    bool check_breakpoint(uint16_t address) const;
+    int breakpoint_count() {return breakpoint_count_;}
+    Breakpoint& breakpoint_at(int idx) { return breakpoints_[idx]; }
+    void clear_breakpoint() { breakpoint_count_ = 0; }
+    // Захват состояния
+    void capture_state(Z80EX_CONTEXT *cpu, uint8_t *memory);
+    
+    // Компактный лог
+    void log_compact(Z80EX_CONTEXT *cpu, uint8_t *memory);
+    
+    // Утилиты
+    std::string print_status(Z80EX_CONTEXT *cpu) const;
+    static std::string print_registers(Z80EX_CONTEXT *cpu);
+    static int print_current_instruction(Z80EX_CONTEXT *cpu, uint8_t *memory, char *buffer, int max_len);
+    
+    // Просмотр памяти
+    static std::string memory_dump(uint8_t *memory, uint32_t start, uint16_t length);
+    static std::string disassemble_range(uint8_t *memory, uint32_t start, uint16_t end);
+    
+    // Обновление состояния
+    bool update(Z80EX_CONTEXT *cpu, uint8_t *memory);
+    
+    // Рендеринг в буфер
+    std::string render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory);
+    
+    // Геттеры
+    DebugMode mode() const { return mode_; }
+    size_t breakpoint_count() const { return breakpoint_count_; }
+    uint64_t total_cycles() const { return total_cycles_; }
+    uint64_t instruction_count() const { return instruction_count_; }
+    bool should_update_screen() const { return should_update_screen_; }
+    
+    // Сеттеры
+    void set_trace_delay(int delay_ms) { trace_delay_ms_ = delay_ms; }
+    void set_should_update_screen(bool update) { should_update_screen_ = update; }
 
-// ============ ОСНОВНОЙ ИНТЕРФЕЙС ============
+    static const char* mode_to_str(DebugMode mode) {
+        switch (mode) 
+        {
+        case DebugMode::RUN:      return "RUN";     // Беспрерывное исполнение
+        case DebugMode::TRACE:    return "TRACE";   // Исполнение с паузами (трассировка)
+        case DebugMode::STEP:     return "STEP";    // Пошаговое исполнение
+        case DebugMode::PAUSE:    return "PAUSE";   // Пауза
+        default: return "UNKNOWN";
+        }
+    };
+};
 
-// Инициализация
-void debugger_init(Debugger *dbg);
-
-// Управление исполнением
-void debugger_run(Debugger *dbg);
-void debugger_trace(Debugger *dbg);
-void debugger_pause(Debugger *dbg);
-void debugger_step(Debugger *dbg);
-
-// Точки останова
-bool debugger_add_breakpoint(Debugger *dbg, uint16_t address, const char *desc);
-bool debugger_remove_breakpoint(Debugger *dbg, uint16_t address);
-void debugger_list_breakpoints(const Debugger *dbg, char *buffer, int max_len);
-bool debugger_check_breakpoint(const Debugger *dbg, uint16_t address);
-
-// Захват состояния (аналог debug_capture_state)
-void debugger_capture_state(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memory);
-
-// Компактный лог (аналог debug_log_compact)
-void debugger_log_compact(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memory);
-
-// Утилиты
-void debugger_print_status(const Debugger *dbg, Z80EX_CONTEXT *cpu, char *buffer, int max_len);
-void debugger_print_registers(Z80EX_CONTEXT *cpu, char *buffer, int max_len);
-void debugger_print_current_instruction(Z80EX_CONTEXT *cpu, uint8_t *memory, char *buffer, int max_len);
-
-// Просмотр памяти
-void debugger_memory_dump(uint8_t *memory, uint16_t start, uint16_t length, char *buffer, int max_len);
-void debugger_disassemble_range(uint8_t *memory, uint16_t start, uint16_t end, char *buffer, int max_len);
-
-// Обновление состояния (вызывать на каждом шаге CPU)
-bool debugger_update(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memory);
-
-// Рендеринг в буфер (для экрана) - аналог debug_render_to_buffer
-void debugger_render_to_buffer(Debugger *dbg, Z80EX_CONTEXT *cpu, uint8_t *memory, char *buffer, int max_len);
-
-#endif
+#endif // DEBUGGER_HPP

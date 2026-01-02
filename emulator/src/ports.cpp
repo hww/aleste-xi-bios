@@ -6,14 +6,6 @@
 #include "globals.h"
 #include "palette.h"
 
-NativeMMU g_mmu;
-Palette g_palette;
-
-// Инициализация при объявлении
-mc6845_t g_crct = {
-    .screenMode = EScreenMode_Linear16k1b,
-    .screenPosition = 0x8000
-};
 
 void ports_reset()
 {
@@ -47,9 +39,9 @@ uint8_t port_read(Z80EX_CONTEXT *cpu, uint16_t port, void *user_data) {
 // Запись в порт (наш виртуальный UART)
 void port_write(Z80EX_CONTEXT *cpu, uint16_t port, uint8_t value, void *user_data) {
     if (g_mmu.check_port(port, ECycle::IOWR)) {
-        g_mmu.process_cycle(port, ECycle::IOWR, 0x00);
+        g_mmu.process_cycle(port, ECycle::IOWR, value);
     } else if (g_palette.check_port(port, ECycle::IOWR)) {
-        g_palette.process_cycle(port, ECycle::IOWR, 0x00);
+        g_palette.process_cycle(port, ECycle::IOWR, value);
     }
     //if ((port & 0xFF) == UART_PORT) {
     //    putchar(value);

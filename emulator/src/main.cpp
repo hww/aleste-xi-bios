@@ -15,19 +15,7 @@
 #include "utils/ibuffer.h"
 #include "commands.h"
 
-// Глобальные переменные
-Debugger debugger;
-Z80EX_CONTEXT *cpu = NULL;
 
-const char* debugger_mode_to_str(int mode) {
-    switch (mode) {
-        case DEBUG_MODE_PAUSE: return "PAUSE";
-        case DEBUG_MODE_RUN: return "RUN";
-        case DEBUG_MODE_STEP: return "STEP";
-        case DEBUG_MODE_TRACE: return "TRACE";
-        default: return "UNKNOWN";
-    }
-}
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -36,7 +24,6 @@ int main(int argc, char *argv[]) {
     }
     
     // Инициализация
-    debugger_init(&debugger);
     ports_reset();
 
     printf("Loading file %s...\n", argv[1]);
@@ -48,7 +35,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    size_t bytes_read = fread(memory, 1, 0x10000, f);
+    size_t bytes_read = fread(&memory[0xC00000], 1, 0x10000, f);
     fclose(f);
     
     if (bytes_read == 0) {
@@ -120,7 +107,7 @@ int main(int argc, char *argv[]) {
                         case SDLK_x:
                             if (alt_pressed) {
                                 minibuffer.show(">> ", "");
-                                ibuffer.printf("Minibuffer activated (Alt+X)\n");
+                                //ibuffer.printf("Minibuffer activated (Alt+X)\n");
                             }
                             break;
                             
@@ -132,29 +119,29 @@ int main(int argc, char *argv[]) {
                             
                         case SDLK_r:
                             if (!ctrl_pressed) {
-                                debugger_run(&debugger);
+                                debugger.run();
                                 ibuffer.printf("Debugger: Run mode\n");
                             }
                             break;
                             
                         case SDLK_s:
                             if (!ctrl_pressed) {
-                                debugger_step(&debugger);
+                                debugger.step();
                                 ibuffer.printf("Debugger: Single step\n");
                             }
                             break;
                             
                         case SDLK_t:
-                            debugger_trace(&debugger);
+                            debugger.trace();
                             ibuffer.printf("Debugger: Trace mode\n");
                             break;
                             
                         case SDLK_SPACE:
-                            if (debugger.mode == DEBUG_MODE_RUN) {
-                                debugger_pause(&debugger);
+                            if (debugger.mode() == DebugMode::RUN) {
+                                debugger.pause();
                                 ibuffer.printf("Debugger: Paused\n");
                             } else {
-                                debugger_run(&debugger);
+                                debugger.run();
                                 ibuffer.printf("Debugger: Running\n");
                             }
                             break;
@@ -184,10 +171,10 @@ int main(int argc, char *argv[]) {
                             break;
                             
                         case SDLK_ESCAPE:
-                            if (debugger.mode == DEBUG_MODE_PAUSE) {
+                            if (debugger.mode() == DebugMode::PAUSE) {
                                 quit = true;
                             } else {
-                                debugger_pause(&debugger);
+                                debugger.pause();
                             }
                             break;
                             
@@ -219,7 +206,7 @@ int main(int argc, char *argv[]) {
         }
         
         // Обновление дебаггера (выполнение инструкций)
-        debugger_update(&debugger, cpu, memory);
+        debugger.update(cpu, memory);
         
         // Обновление экрана с фиксированной частотой
         uint32_t current_time = SDL_GetTicks();
@@ -231,11 +218,11 @@ int main(int argc, char *argv[]) {
             snprintf(window_title, sizeof(window_title), 
                     "Z80 Debugger - PC: 0x%04X - Mode: %s", 
                     z80ex_get_reg(cpu, regPC),
-                    debugger_mode_to_str(debugger.mode));
+                    Debugger::mode_to_str(debugger.mode()));
             set_window_title(window_title);
             
             // Обновление экрана
-            update_screen(cpu, memory, g_crct.screenPosition, g_crct.screenMode, &debugger);
+            update_screen(cpu, memory, g_crct.screenPosition, g_crct.screenMode);
         }
         
         // Небольшая задержка для снижения нагрузки на CPU

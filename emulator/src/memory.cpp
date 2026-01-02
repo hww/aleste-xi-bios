@@ -1,28 +1,51 @@
+#include <cassert>
 #include "memory.h"
-
-uint8_t memory[RAM_SIZE];
+#include "mmu_native.h"
+#include "globals.h"
+#include "ports.h"
 
 // ============================================================
 // Ports
 // ============================================================
 
-// 1. Исправленная функция чтения памяти
 uint8_t mem_read(Z80EX_CONTEXT *cpu, uint16_t addr, int m1_state, void *user_data) {
     // m1_state будет 1, если CPU читает опкод, и 0 в остальных случаях
-    return memory[addr];
+    if (g_mmu.is_native_mode())
+    {
+        return g_mmu.process_cycle(addr, ECycle::MRD, 0x00);
+    } else {
+        return memory[addr];
+    }
 }
 
 void mem_write(Z80EX_CONTEXT *cpu, uint16_t addr, uint8_t value, void *user_data) {
     // Имитируем реальное ПЗУ: запись разрешена только выше области ROM
-    if (addr >= ROM_SIZE) {
+    if (g_mmu.is_native_mode())
+    {
+        g_mmu.process_cycle(addr, ECycle::MWR, value);
+    } else {
         memory[addr] = value;
     }
 }
 
-
-// Обертка для дизассемблера (без m1_state)
-uint8_t dasm_read_byte(uint16_t addr, void *user_data) {
-    // В user_data мы обычно передаем указатель на память или контекст, 
-    // но так как memory у нас глобальная, можем брать напрямую.
-    return memory[addr]; 
+// Функция для чтения байта (для дизассемблера)
+uint8_t dasm_read_byte(uint16_t addr, void *user_data)
+{
+    uint8_t dummy_data  = 0;
+    if (g_mmu.is_native_mode())
+    {
+        return g_mmu.process_cycle(addr, ECycle::MRD, dummy_data);
+    } else {
+        return memory[addr];
+    }
+    return 0xFF;
+}
+uint32_t dasm_translate_address(uint16_t addr, ECycle cycle)
+{
+    if (g_mmu.is_native_mode())
+    {
+        return g_mmu.translate_address(addr, cycle);
+    } else {
+        return addr;
+    }
 }

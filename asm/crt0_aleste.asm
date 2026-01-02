@@ -30,11 +30,15 @@ SECTION code_crt_start
 start:
     ; Инициализация Aleste
     di
+    ld sp, 0x7F00
     ld a, 0x00
     out (0xF0), a
-    ld sp, 0xFF00
+    ld a, 0x01
+    out (0xF1), a
     ld a, 0x02
-    out (0xF0), a
+    out (0xF2), a
+    ld a, 0x03
+    out (0xF3), a
 
     
     ; Вызов C main()

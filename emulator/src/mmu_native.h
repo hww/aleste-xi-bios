@@ -10,9 +10,10 @@
 #include "globals.h"
 
 class NativeMMU {
+    uint8_t* memory;
 public:
     // Конструктор
-    NativeMMU() {
+    NativeMMU(uint8_t* mem) : memory(mem) {
         reset();
     }
     
@@ -53,6 +54,7 @@ public:
     
     // Получить текущий слот
     uint8_t get_current_slot(uint16_t addr, ECycle cycle) const;
+    uint8_t get_current_slot_for_page(uint8_t page) const;
 
     // Получить текущий банк для отладки
     uint8_t get_current_bank(uint16_t addr, ECycle cycle) const;
@@ -104,7 +106,7 @@ private:
     uint8_t handle_io_read(uint16_t addr) const;
     
     // Обработка доступа к памяти
-    void handle_memory_access(uint16_t addr, ECycle cycle);
+    uint8_t handle_memory_access(uint16_t addr, ECycle cycle, uint8_t data_in) ;
     
     // Обработка записи регистров в Native mode
     void handle_native_register_write(uint8_t reg_addr, uint8_t data);
