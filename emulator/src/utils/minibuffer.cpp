@@ -51,9 +51,11 @@ void Minibuffer::show_with_prompt(const std::string& initial_text) {
 }
 
 void Minibuffer::hide() {
+    /*
     visible_ = false;
     SDL_StopTextInput();
     notify_visibility_changed();
+    */
 }
 
 void Minibuffer::clear() {

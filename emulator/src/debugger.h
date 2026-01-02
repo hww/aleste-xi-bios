@@ -100,8 +100,9 @@ public:
     static int print_current_instruction(Z80EX_CONTEXT *cpu, uint8_t *memory, char *buffer, int max_len);
     
     // Просмотр памяти
-    static std::string memory_dump(uint8_t *memory, uint32_t start, uint16_t length);
-    static std::string disassemble_range(uint8_t *memory, uint32_t start, uint16_t end);
+    static std::string memory_dump(uint8_t *memory, uint16_t start, uint16_t length);
+    static std::string disassemble_range(uint8_t *memory, uint16_t start, uint16_t end);
+    static std::string memory_wb_dump(uint8_t *memory, uint32_t start, uint16_t length);
     
     // Обновление состояния
     bool update(Z80EX_CONTEXT *cpu, uint8_t *memory);

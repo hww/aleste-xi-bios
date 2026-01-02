@@ -434,20 +434,16 @@ void render_ibuffer(IBuffer& buffer, int x, int y, int width, int height, int ma
         // Номер строки (1-based)
         int line_number = display_start_line + displayed_lines + 1;
         
-        // Формируем строку с номером
-        char line_with_num[512];
-        
         // Обрезаем слишком длинные строки
         std::string display_line = line;
         if (display_line.length() > static_cast<size_t>(max_chars - 6)) {
             display_line = display_line.substr(0, max_chars - 6) + "...";
         }
         
-        snprintf(line_with_num, sizeof(line_with_num), "%4d: %s", 
-                 line_number, display_line.c_str());
+ 
         
         // Рисуем строку
-        draw_text(text_x, current_y, line_with_num, IBUF_TEXT_COLOR);
+        draw_text(text_x, current_y, display_line.c_str(), IBUF_TEXT_COLOR);
         
         current_y += line_height;
         displayed_lines++;

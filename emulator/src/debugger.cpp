@@ -337,14 +337,17 @@ std::string Debugger::print_status(Z80EX_CONTEXT *cpu) const {
 }
 
 // ============ ПРОСМОТР ПАМЯТИ ============
-
-std::string Debugger::memory_dump(uint8_t *memory, uint32_t start, uint16_t length) {
+std::string Debugger::memory_dump(uint8_t *memory, uint16_t start, uint16_t length) {
+    auto start_mmu = dasm_translate_address(start, ECycle::MRD);
+    return memory_wb_dump(memory, start_mmu, length);
+}
+std::string Debugger::memory_wb_dump(uint8_t *memory, uint32_t start, uint16_t length) {
     if (!memory) return "";
     
     std::ostringstream oss;
     oss << "=== MEMORY DUMP " 
-        << std::hex << std::setw(4) << std::setfill('0') << start 
-        << "-" << std::setw(4) << (start + length - 1) << " ===\n";
+        << std::hex << std::setw(6) << std::setfill('0') << start 
+        << "-" << std::setw(6) << (start + length - 1) << " ===\n";
     
     for (uint16_t i = 0; i < length; i += 16) {
         // Адрес
@@ -371,17 +374,16 @@ std::string Debugger::memory_dump(uint8_t *memory, uint32_t start, uint16_t leng
         
         if (i + 16 < length) oss << "\n";
     }
-    ibuffer.println(oss.str());
     return oss.str();
 }
 
-std::string Debugger::disassemble_range(uint8_t *memory, uint32_t start, uint16_t end) {
-    if (!memory || start >= end) return "";
-    
+std::string Debugger::disassemble_range(uint8_t *memory, uint16_t start, uint16_t dislen) {
+    if (dislen <= 0) return "";
+    auto end = start + dislen;
     std::ostringstream oss;
     oss << "=== DISASSEMBLY " 
-        << std::hex << std::setw(4) << std::setfill('0') << start 
-        << "-" << std::setw(4) << end << " ===\n";
+        << std::hex << std::setw(6) << std::setfill('0') << start 
+        << "-" << std::setw(6) << end << " ===\n";
     
     uint16_t addr = start;
     while (addr < end) {
@@ -412,7 +414,6 @@ std::string Debugger::disassemble_range(uint8_t *memory, uint32_t start, uint16_
         
         addr += len;
     }
-    ibuffer.println(oss.str());
     return oss.str();
 }
 

@@ -40,6 +40,7 @@ uint8_t dasm_read_byte(uint16_t addr, void *user_data)
     }
     return 0xFF;
 }
+
 uint32_t dasm_translate_address(uint16_t addr, ECycle cycle)
 {
     if (g_mmu.is_native_mode())

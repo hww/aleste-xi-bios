@@ -184,7 +184,7 @@ void register_debugger_commands(CLI& cli, Debugger* debugger, Z80EX_CONTEXT* cpu
 
 void register_memory_commands(CLI& cli, uint8_t* memory) {
     // Дамп памяти
-    cli.register_command("m", "Dump memory <address> [length]", 
+    cli.register_command("dump", "Dump memory <address> [length]", 
         [memory](const auto& args) {
             if (args.empty()) {
                 ibuffer.printf("Usage: m <address> [length]\n");
@@ -196,7 +196,7 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
                 return;
             }
             
-            uint32_t addr = CLIUtils::hex_to_int(args[0]);
+            uint16_t addr = CLIUtils::hex_to_int(args[0]);
             uint16_t len = 256;  // По умолчанию
             
             if (args.size() > 1) {
@@ -209,10 +209,10 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
             
 
             auto str = Debugger::memory_dump(memory, addr, len);
-            ibuffer.printf("%s", str);
+            ibuffer.printf("%s", str.c_str());
         });
     
-    cli.register_command("dump", "Dump memory <address> [length]", 
+    cli.register_command("wdump", "Dump memory <address> [length]", 
         [memory](const auto& args) {
             if (args.empty()) {
                 ibuffer.printf("Usage: dump <address> [length]\n");
@@ -235,8 +235,8 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
                 len = CLIUtils::hex_to_int(args[1]);
             }
             
-            auto str = Debugger::memory_dump(memory, addr, len);
-            ibuffer.printf("%s", str);
+            auto str = Debugger::memory_wb_dump(memory, addr, len);
+            ibuffer.printf("%s", str.c_str());
         });
     
     // Дизассемблирование
@@ -257,10 +257,10 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
             
    
             auto str = Debugger::disassemble_range(memory, start, end);
-            ibuffer.printf("%s", str);
+            ibuffer.printf("%s", str.c_str());
         });
     
-    cli.register_command("disasm", "Disassemble <start> <end>", 
+    cli.register_command("wdis", "Disassemble <start> <end>", 
         [memory](const auto& args) {
             if (args.size() < 2) {
                 ibuffer.printf("Usage: disasm <start> <end>\n");
@@ -277,7 +277,7 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
             
            
             auto str = Debugger::disassemble_range(memory, start, end);
-            ibuffer.printf("%s", str);
+            ibuffer.printf("%s", str.c_str());
         });
     
     // Запись в память
