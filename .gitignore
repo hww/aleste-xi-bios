@@ -43,5 +43,8 @@
 
 *.i
 
-output
+
+bin
 build
+out
+output
