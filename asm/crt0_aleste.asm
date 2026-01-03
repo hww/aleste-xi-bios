@@ -32,13 +32,13 @@ start:
     di
     ld sp, 0x7F00
     ld a, 0x00
-    out (0xF0), a
+    out (0xFC), a
     ld a, 0x01
-    out (0xF1), a
+    out (0xFD), a
     ld a, 0x02
-    out (0xF2), a
+    out (0xFE), a
     ld a, 0x03
-    out (0xF3), a
+    out (0xFF), a
 
     
     ; Вызов C main()

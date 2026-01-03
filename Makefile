@@ -104,4 +104,4 @@ clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
 
 run: $(TARGET).bin
-	bin/z80_emu ../output/aleste.bin
+	bin/z80_emu output/aleste.bin

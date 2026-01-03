@@ -51,11 +51,9 @@ void Minibuffer::show_with_prompt(const std::string& initial_text) {
 }
 
 void Minibuffer::hide() {
-    /*
     visible_ = false;
     SDL_StopTextInput();
     notify_visibility_changed();
-    */
 }
 
 void Minibuffer::clear() {
@@ -81,6 +79,11 @@ bool Minibuffer::handle_event(const SDL_Event& event) {
             
         case SDL_TEXTINPUT:
             handle_text_input(event.text);
+            break;
+
+        case SDLK_ESCAPE:
+            hide();
+            return false;
             break;
     }
     

@@ -7,12 +7,11 @@
 #include <cstdio>  
 #include <iostream>
 
-IBuffer::IBuffer(size_t max_size, int visible_lines) 
-    : max_size_(max_size), current_size_(0), scroll_pos_(0), visible_lines_(visible_lines) 
+IBuffer::IBuffer(size_t max_lines, int visible_lines) 
+    : max_lines_(max_lines), scroll_pos_(0), visible_lines_(visible_lines) 
 {
     if (visible_lines_ < 1) visible_lines_ = 20;
 }
-
 void IBuffer::print(const std::string& text) {
     if (text.empty()) return;
     
@@ -27,37 +26,21 @@ void IBuffer::print(const std::string& text) {
             if (!lines_.empty()) {
                 // Добавляем к последней строке
                 std::string& last_line = lines_.back();
-                size_t new_size = current_size_ - last_line.length() + remaining.length();
-                
-                if (new_size <= max_size_) {
-                    last_line.append(remaining);
-                    current_size_ = new_size;
-                    if (line_added_cb_) line_added_cb_(last_line);
-                    return;
-                }
+                last_line.append(remaining);
+            } else {
+                // Нет последней строки - создаем новую
+                add_line(std::string(remaining));
             }
-            
-            // Нет последней строки или не помещается - создаем новую
-            add_line(std::string(remaining));
             return;
         }
         
-        // Есть \n - обрабатываем строку до него
+        // Есть \н - обрабатываем строку до него
         std::string_view line_part = remaining.substr(0, newline_pos);
         
         if (!lines_.empty()) {
             // Добавляем к последней строке
             std::string& last_line = lines_.back();
-            size_t new_size = current_size_ - last_line.length() + line_part.length();
-            
-            if (new_size <= max_size_) {
-                last_line.append(line_part);
-                current_size_ = new_size;
-                if (line_added_cb_) line_added_cb_(last_line);
-            } else {
-                // Не помещается - создаем новую строку
-                add_line(std::string(line_part));
-            }
+            last_line.append(line_part);
         } else {
             // Нет строк - создаем новую
             add_line(std::string(line_part));
@@ -70,7 +53,6 @@ void IBuffer::print(const std::string& text) {
         remaining = remaining.substr(newline_pos + 1);
     }
 }
-
 void IBuffer::printf(const char* format, ...) {
     char buffer[1024];
     va_list args;
@@ -127,12 +109,11 @@ void IBuffer::println_color(const std::string& color, const char* format, ...) {
 
 void IBuffer::clear() {
     lines_.clear();
-    current_size_ = 0;
     scroll_pos_ = 0;
 }
 
-void IBuffer::trim_to_size(size_t new_max_size) {
-    max_size_ = new_max_size;
+void IBuffer::trim_to_lines_num(size_t new_max_lines) {
+    max_lines_ = new_max_lines;
     check_and_trim();
     ensure_scroll_validity();
 }
@@ -210,14 +191,7 @@ bool IBuffer::contains(const std::string& text) const {
 IBuffer::Stats IBuffer::get_stats() const {
     Stats stats;
     stats.total_lines = lines_.size();
-    stats.total_bytes = current_size_;
-    stats.max_lines = max_size_ / 50; // Примерная оценка
-    
-    if (!lines_.empty()) {
-        stats.avg_line_length = current_size_ / lines_.size();
-    } else {
-        stats.avg_line_length = 0;
-    }
+    stats.max_lines = max_lines_; // Примерная оценка
     
     return stats;
 }
@@ -321,39 +295,49 @@ int IBuffer::get_display_start_line() const {
 // ============ PRIVATE METHODS ============
 
 void IBuffer::add_line(const std::string& line) {
-    size_t line_size = line.length() + 1;
-    
-    bool was_at_end = is_at_end();
-    if (line.size() > 0)
+    if (line.size() > 0) {
         std::cout << "IBuffer::add_line(\"" << line << "\")" << std::endl;
-    
-    // Проверяем, поместится ли новая строка
-    while (!lines_.empty() && current_size_ + line_size > max_size_) {
-        check_and_trim();
     }
     
+    bool was_at_end = is_at_end();
+    
+    // Просто добавляем строку
     lines_.push_back(line);
-    current_size_ += line_size;
+    
+    // Если превысили лимит строк, удаляем самые старые
+    // Но только если max_lines_ > 0!
+    if (max_lines_ > 0 && lines_.size() > max_lines_) {
+        lines_.erase(lines_.begin());
+        
+        if (scroll_pos_ > 0) {
+            scroll_pos_--;
+        }
+    }
     
     if (line_added_cb_) {
         line_added_cb_(line);
     }
     
-    // ВАЖНО: Автоскролл к новой строке, если мы были в конце
     if (was_at_end) {
-        scroll_to_end();  // ЭТО ДОЛЖНО БЫТЬ ВЫЗВАНО!
+        scroll_to_end();
     }
     
     ensure_scroll_validity();
 }
 
 void IBuffer::check_and_trim() {
-    while (!lines_.empty() && current_size_ > max_size_) {
+    // Добавляем проверку max_lines_ > 0
+    if (max_lines_ == 0) {
+        // Если max_lines_ = 0, очищаем все
+        lines_.clear();
+        scroll_pos_ = 0;
+        return;
+    }
+    
+    while (!lines_.empty() && lines_.size() > max_lines_) {
         size_t removed_size = lines_.front().length() + 1;
         lines_.erase(lines_.begin());
-        current_size_ -= removed_size;
         
-        // Корректируем позицию скролла при удалении строк
         if (scroll_pos_ > 0) {
             scroll_pos_ = std::max(0, scroll_pos_ - 1);
         }

@@ -9,7 +9,7 @@
 class IBuffer {
 public:
     // Конструктор с максимальным размером в байтах и количеством видимых строк
-    explicit IBuffer(size_t max_size = 4096, int visible_lines = 20);
+    explicit IBuffer(size_t max_line = 1024, int visible_lines = 20);
     
     // Деструктор
     ~IBuffer() = default;
@@ -39,13 +39,10 @@ public:
     void clear();
     
     // Ограничить размер буфера (обрезать старые данные)
-    void trim_to_size(size_t new_max_size);
+    void trim_to_lines_num(size_t new_max_lines);
     
     // Получить максимальный размер
-    size_t get_max_size() const { return max_size_; }
-    
-    // Получить текущий размер в байтах
-    size_t get_current_size() const { return current_size_; }
+    size_t get_max_lines() const { return max_lines_; }
     
     // Получить/установить количество видимых строк
     int get_visible_lines_count() const { return visible_lines_; }
@@ -101,9 +98,7 @@ public:
     // Получить статистику
     struct Stats {
         size_t total_lines;
-        size_t total_bytes;
         size_t max_lines;
-        size_t avg_line_length;
     };
     Stats get_stats() const;
     
@@ -145,8 +140,7 @@ private:
     std::string format_color(const std::string& color) const;
 
     std::vector<std::string> lines_;
-    size_t max_size_;
-    size_t current_size_;
+    size_t max_lines_;
     int visible_lines_;    // Количество строк, которые показываются
     LineAddedCallback line_added_cb_;
     BufferOverflowCallback overflow_cb_;

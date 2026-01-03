@@ -119,7 +119,7 @@ uint8_t audio_stop(audio_channel_t channel) __z88dk_fastcall __naked {
 }
 
 uint8_t audio_set_volume(audio_channel_t channel, audio_volume_t volume) __naked {
-    channel; volume;
+    (void)channel; (void)volume;
     __asm
         ld hl, #2
         add hl, sp
@@ -151,6 +151,7 @@ uint8_t audio_set_noise_type(audio_noise_t type) __z88dk_fastcall __naked {
 }
 
 uint8_t audio_set_noise_custom(uint8_t period) __z88dk_fastcall __naked {
+    (void)period;
     __asm
         ; fastcall: period уже в L
         ld a, l
@@ -162,7 +163,7 @@ uint8_t audio_set_noise_custom(uint8_t period) __z88dk_fastcall __naked {
 }
 
 uint8_t audio_enable_noise(audio_channel_t channel, bool enable) __naked {
-    channel; enable;
+    (void)channel; (void)enable;
     __asm
         ld hl, #2
         add hl, sp
@@ -242,6 +243,7 @@ uint8_t audio_enable_tone(audio_channel_t channel, bool enable) __naked {
 // ============================================================================
 
 uint8_t audio_read_register(uint8_t reg) __z88dk_fastcall __naked {
+    (void)reg;
     __asm
         ; fastcall: reg уже в L
         ld a, l
@@ -324,6 +326,7 @@ uint8_t audio_beep(audio_note_t note, uint16_t duration) __naked {
  */
 uint8_t audio_play_note_by_name(const char* name, audio_channel_t channel, 
                                audio_volume_t volume) {
+    (void)name;
     // TODO: преобразование строки в номер ноты
     // Пока просто заглушка
     return audio_play_note(NOTE_C4, channel, volume);

@@ -21,7 +21,7 @@ Z80EX_CONTEXT *cpu = NULL;
 // ============================================================
 
 Minibuffer minibuffer;
-IBuffer ibuffer = IBuffer(4096,14);
+IBuffer ibuffer = IBuffer(512,14);
 
 // ============================================================
 // Command Shell

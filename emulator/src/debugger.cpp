@@ -645,9 +645,11 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
     // 6. Дизассемблер
     bp_println_color(&bp, COLOR_CYAN, "DISASSEMBLER:");
     
+
     // Показываем предыдущие инструкции из истории
     if (history_count_ > 0) {
-        int history_to_show = (history_count_ < 3) ? static_cast<int>(history_count_) : 3;
+        int history_lines = 2;
+        int history_to_show = (history_count_ < history_lines) ? static_cast<int>(history_count_) : history_lines;
         
         for (int i = 0; i < history_to_show; i++) {
             int idx = (static_cast<int>(history_index_) - history_to_show + i) % 10;
@@ -699,7 +701,7 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
         
         // Показываем следующие команды
         uint16_t next_pc = pc + current_len;
-        int next_to_show = 3;
+        int next_to_show = 4;
         
         for (int i = 0; i < next_to_show; i++) {
             std::array<char, 64> next_dasm;

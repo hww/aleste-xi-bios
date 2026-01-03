@@ -25,7 +25,7 @@ PUBLIC __mmu_vtable              ;
 PUBLIC __mmu_detect, __mmu_install, __mmu_get_info, __mmu_command, __mmu_uninstall
 PUBLIC __mmu_set_context, __mmu_get_context, __mmu_map_page, __mmu_lock, __mmu_unlock
 
-SECTION DR__VTABLE
+SECTION DRV_VTABLE
 align 32
 
 __mmu_vtable:
@@ -75,7 +75,7 @@ mmu_info:
 ; ===================================================================
 ; КОД ДРАЙВЕРА
 ; ===================================================================
-SECTION DR__CODE
+SECTION DRV_CODE
 
 ; -------------------------------------------------------------------
 ; mmu_detect - проверка наличия MMU

@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
                     auto cmds = minibuffer.get_text();
                     const char *cmd = cmds.c_str();
                     cli.execute(cmd);
-                    minibuffer.hide();
+                    //minibuffer.hide();
                     minibuffer.clear();
                 }
             } else {
