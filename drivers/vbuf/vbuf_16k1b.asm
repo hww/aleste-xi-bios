@@ -27,11 +27,11 @@ defc VBUF_FLAG_DOUBLEBUF     = 1 << 1
 defc VBUF_FLAG_LINEAR        = 1 << 2
 
 ; ---- Секция: Таблицы конкретных драйверов ----
-section vbuf_driver_tables
+section DRV_VTABLE
 
 ; Таблица драйвера 16K 1bpp
-PUBLIC _drv_16k1b_vtable
-_drv_16k1b_vtable:
+PUBLIC __drv_16k1b_vtable
+__drv_16k1b_vtable:
     jp drv_16k1b_init
     jp drv_16k1b_get_mode_info
     jp drv_16k1b_command
@@ -65,7 +65,7 @@ _drv_16k1b_vtable:
     jp drv_16k1b_clear_backbuf
 
 ; ---- Секция: Данные драйвера ----
-section vbuf_16k1b_data
+section DRV_DATA
 
 ; Информация о режиме
 drv_16k1b_mode_info:
@@ -84,7 +84,7 @@ drv_16k1b_clip_rect:
     dw SCREEN_HEIGHT     ; h
 
 ; ---- Секция: Код драйвера ----
-section vbuf_16k1b_code
+section DRV_CODE
 
 ; --- Вспомогательные функции ---
 
@@ -485,7 +485,7 @@ drv_16k1b_clear_backbuf:
     ret
 
 ; Информация о драйвере (обязательная)
-section vbuf_16k1b_info
+section DRV_DATA
 drv_16k1b_info:
     dw @name
     db 1, 0        ; версия 1.0

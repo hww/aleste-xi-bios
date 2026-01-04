@@ -43,7 +43,8 @@ start:
     
     ; Вызов C main()
     call _main
-    
+
     ; Завершение
+    ld a, 0x01
     di
     halt

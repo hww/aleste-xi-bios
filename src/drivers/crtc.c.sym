@@ -1,0 +1,4 @@
+_crtc_command                   = $0012 ; addr, public, , , code_compiler, src/drivers/crtc.c:280
+_crtc_install                   = $0000 ; addr, public, , , code_compiler, src/drivers/crtc.c:258
+_crtc_set_mode                  = $0003 ; addr, public, , , code_compiler, src/drivers/crtc.c:263
+_crtc_set_view                  = $0007 ; addr, public, , , code_compiler, src/drivers/crtc.c:269

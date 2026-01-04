@@ -13,20 +13,197 @@
 #include <iomanip>
 
 // ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+// Простая функция поиска hex адреса после префикса '#'
+static std::string find_hex_after_hash(const std::string& line) {
+    size_t pos = line.find('#');
+    if (pos == std::string::npos) return "";
+    
+    // Проверяем что после '#' есть минимум 4 символа
+    if (line.length() < pos + 5) return "";
+    
+    // Берем 4 символа после '#'
+    std::string potential = line.substr(pos + 1, 4);
+    
+    // Проверяем что все символы hex
+    for (char c : potential) {
+        if (!isxdigit(c)) return "";
+    }
+    
+    return potential;
+}
 
+// Простая конвертация
+static uint16_t hex_to_uint16_simple(const std::string& hex) {
+    uint16_t val = 0;
+    
+    for (char c : hex) {
+        val = val * 16;
+        
+        if (c >= '0' && c <= '9') {
+            val += (c - '0');
+        } else if (c >= 'A' && c <= 'F') {
+            val += (c - 'A' + 10);
+        } else if (c >= 'a' && c <= 'f') {
+            val += (c - 'a' + 10);
+        }
+    }
+    
+    return val;
+}
+// Функция для замены всех hex адресов на символы
+static std::string replace_hex_with_symbols(const std::string& line, Z88dkSymParser& sym_parser) {
+    std::string result = line;
+    size_t pos = 0;
+    
+    while (true) {
+        // Ищем следующий '#'
+        pos = result.find('#', pos);
+        if (pos == std::string::npos) break;
+        
+        // Проверяем что после '#' есть 4 hex символа
+        if (result.length() < pos + 5) break;
+        
+        std::string hex_part = result.substr(pos + 1, 4);
+        bool is_hex = true;
+        for (char c : hex_part) {
+            if (!isxdigit(c)) {
+                is_hex = false;
+                break;
+            }
+        }
+        
+        if (!is_hex) {
+            pos++;
+            continue;
+        }
+        
+        // Конвертируем hex
+        uint16_t addr = 0;
+        for (char c : hex_part) {
+            addr = addr * 16;
+            if (c >= '0' && c <= '9') addr += (c - '0');
+            else if (c >= 'A' && c <= 'F') addr += (c - 'A' + 10);
+            else if (c >= 'a' && c <= 'f') addr += (c - 'a' + 10);
+        }
+        
+        // Ищем символ
+        std::string symbol = sym_parser.get_name(addr, 256);
+        
+        // Если нашли символ - заменяем
+        if (!symbol.empty() && symbol.find('+') == std::string::npos) {
+            // Заменяем "#xxxx" на "symbol@xxxx"
+            std::string replacement = symbol + " @ #" + hex_part;
+            result.replace(pos, 5, replacement);
+            
+            // Сдвигаем позицию после замены
+            pos += replacement.length();
+        } else {
+            // Не нашли символ, идем дальше
+            pos += 5;
+        }
+    }
+    
+    return result;
+}
+
+// Упрощенная версия функции
+int Debugger::z80ex_dasm_local(char *output, int output_size, unsigned flags,
+                               int *t_states, int *t_states2,
+                               z80ex_dasm_readbyte_cb readbyte_cb,
+                               Z80EX_WORD addr, void *user_data) {
+
+    int cnt = z80ex_dasm(output, output_size, flags, t_states, t_states2,
+                         readbyte_cb, addr, user_data);
+    
+    if (cnt > 0 && sym_parser_.is_loaded()) {
+        std::string line = output;
+        
+        // Заменяем все hex адреса на символы
+        std::string new_line = replace_hex_with_symbols(line, sym_parser_);
+        
+        // Копируем обратно
+        if (new_line.length() < static_cast<size_t>(output_size)) {
+            strcpy(output, new_line.c_str());
+        } else {
+            strncpy(output, new_line.c_str(), output_size - 1);
+            output[output_size - 1] = '\0';
+        }
+    }
+    
+    return cnt;
+}
 // Функция для дизассемблирования инструкции returns bytes cunt in the instruction
-static int disassemble_instruction(uint16_t pc, uint8_t *memory, char *buffer, size_t buf_size) {
+int Debugger::disassemble_instruction(uint16_t pc, uint8_t *memory, char *buffer, size_t buf_size) {
     if (!buffer || buf_size == 0 || !memory) return 0;
     
     if (pc >= 0xFFFF) return 0;
     
     int t1, t2;
-    int result = z80ex_dasm(buffer, buf_size - 1, 0, &t1, &t2, 
+    int result = z80ex_dasm_local(buffer, buf_size - 1, 0, &t1, &t2, 
                            dasm_read_byte, pc, memory);
-    
     return result;
 }
+// Метод для форматирования строки дизассемблирования
+std::string Debugger::format_disasm_line(uint16_t addr, bool is_current) {
+    std::ostringstream oss;
+    
+    // Дизассемблируем инструкцию
+    std::array<char, 64> dasm_buffer;
+    int t1, t2;
+    int len = z80ex_dasm_local(dasm_buffer.data(), dasm_buffer.size(), 0, 
+                               &t1, &t2, dasm_read_byte, addr, 0);
+    
+    if (len == 0) {
+        if (is_current) {
+            oss << " >??????: ???";
+        } else {
+            oss << "  ??????: ???";
+        }
+        return oss.str();
+    }
+    
+    // Получаем физический адрес и метку
+    auto full_addr = dasm_translate_address(addr, ECycle::MRD);
+    auto label = sym_parser_.get_name(addr, 0);
+    
+    // Формируем строку байтов
+    std::string bytes_str;
+    for (int j = 0; j < len && j < 4; j++) {
+        char byte_hex[4];
+        auto data = dasm_read_byte(addr + j, 0);
+        snprintf(byte_hex, sizeof(byte_hex), "%02X", data);
+        bytes_str += byte_hex;
+        if (j < len - 1) bytes_str += " ";
+    }
+    
+    // Выравниваем до 8 символов
+    while (bytes_str.length() < 8) {
+        bytes_str += " ";
+    }
+    
+    // Форматируем строку - ЕДИНЫЙ ФОРМАТ ДЛЯ ВСЕХ!
+    // >C00000 метка           байты   инструкция
+    //  C00010 другая_метка    байты   инструкция
+    if (is_current) {
+        oss << " >";
+    } else {
+        oss << "  ";
+    }
+    
+    oss << std::hex << std::uppercase 
+        << std::setw(6) << std::setfill('0') << full_addr << " ";
+    
+    // Метка: заполнитель ' ' (пробел)
+    oss << std::setfill(' ') << std::setw(16) << std::left << label << " ";
+    
+    // Байты: заполнитель ' ' (пробел)
+    oss << std::setw(8) << std::left << bytes_str << " ";
+    
+    oss << dasm_buffer.data();
+    
+    return oss.str();
 
+}
 
 // Функция для получения символа из байта
 static char get_char_from_byte(uint8_t b) {
@@ -34,7 +211,7 @@ static char get_char_from_byte(uint8_t b) {
 }
 
 // Функция для получения байтов из памяти по адресу
-static void get_bytes_at_address(uint8_t *memory, uint16_t addr, uint8_t *bytes, int count) {
+static void get_bytes_at_address(uint16_t addr, uint8_t *bytes, int count) {
     for (int i = 0; i < count; i++) {
         bytes[i] = dasm_read_byte(addr + i, 0);
     }
@@ -52,12 +229,13 @@ CPUState::CPUState() :
 
 // ============ Breakpoint ============
 
-Breakpoint::Breakpoint() : address(0), enabled(false) {
+Breakpoint::Breakpoint() : address(0), enabled(false), temporary(false) {
     description.fill(0);
 }
 
-Breakpoint::Breakpoint(uint16_t addr, const std::string& desc) : 
-    address(addr), enabled(true) {
+
+Breakpoint::Breakpoint(uint16_t addr, bool temp, const std::string& desc) : 
+    address(addr), enabled(true), temporary(temp) {
     description.fill(0);
     if (desc.empty()) {
         snprintf(description.data(), description.size(), "Breakpoint %04X", addr);
@@ -76,10 +254,22 @@ Debugger::Debugger() :
     should_update_screen_(false),
     trace_delay_ms_(100),
     total_cycles_(0),
-    instruction_count_(0) {
+    instruction_count_(0),
+    current_sym_file_(),
+    sym_parser_()
+    {
     
     breakpoints_.fill(Breakpoint());
     history_.fill(CPUState());
+}
+
+bool Debugger::load_symbols(const std::string& path) {
+    if (sym_parser_.load_file(path)) {
+        current_sym_file_ = path;
+        std::cout << "Loaded symbols from: " << path << std::endl;
+        return true;
+    }
+    return false;
 }
 
 // ============ УПРАВЛЕНИЕ ИСПОЛНЕНИЕМ ============
@@ -102,9 +292,65 @@ void Debugger::step() {
     mode_ = DebugMode::STEP;
 }
 
+void Debugger::step_out() {
+    mode_ = DebugMode::STEP_OVER;
+}
+
+void Debugger::step_over() {
+    
+    uint16_t current_pc = z80ex_get_reg(cpu_, regPC);
+    
+    // Дизассемблируем текущую инструкцию
+    std::array<char, 64> instruction;
+    int len = disassemble_instruction(current_pc, memory_, instruction.data(), instruction.size());
+    
+    if (len == 0) {
+        // Не удалось дизассемблировать, делаем обычный шаг
+        mode_ = DebugMode::STEP;
+        return;
+    }
+    
+    // Проверяем, является ли текущая инструкция CALL или RST
+    uint8_t opcode = dasm_read_byte(current_pc, 0);
+    bool is_call_or_rst = false;
+    
+    // Проверяем CALL инструкции
+    if (opcode == 0xCD ||                     // CALL nn
+        (opcode & 0xC7) == 0xC4 ||           // CALL cc, nn
+        (opcode == 0xDD && dasm_read_byte(current_pc + 1, 0) == 0xCD) ||  // CALL (IX)
+        (opcode == 0xFD && dasm_read_byte(current_pc + 1, 0) == 0xCD)) {  // CALL (IY)
+        is_call_or_rst = true;
+    }
+    
+    // Проверяем RST инструкции
+    if ((opcode & 0xC7) == 0xC7) {  // RST p
+        is_call_or_rst = true;
+    }
+    
+    if (is_call_or_rst) {
+        // Это вызов - ставим временную точку останова на следующей инструкции
+        uint16_t next_instr_address = current_pc + len;
+        
+        // Удаляем старую временную точку, если есть
+        remove_temp_breakpoint();
+        
+        // Добавляем новую временную точку
+        add_breakpoint(next_instr_address, true, "[TEMP] Step over breakpoint");
+;
+        
+        // Переходим в режим RUN
+        mode_ = DebugMode::RUN;
+    } else {
+        // Не вызов - просто делаем STEP
+        mode_ = DebugMode::STEP;
+    }
+    
+    should_update_screen_ = true;
+}
+
 // ============ ТОЧКИ ОСТАНОВА ============
 
-bool Debugger::add_breakpoint(uint16_t address, const std::string& desc) {
+bool Debugger::add_breakpoint(uint16_t address, bool temp, const std::string& desc) {
     if (breakpoint_count_ >= breakpoints_.size()) return false;
     
     // Проверяем, не существует ли уже такой точки
@@ -115,7 +361,7 @@ bool Debugger::add_breakpoint(uint16_t address, const std::string& desc) {
     }
     
     // Добавляем новую точку
-    breakpoints_[breakpoint_count_] = Breakpoint(address, desc);
+    breakpoints_[breakpoint_count_] = Breakpoint(address, temp, desc);
     breakpoint_count_++;
     return true;
 }
@@ -134,6 +380,20 @@ bool Debugger::remove_breakpoint(uint16_t address) {
     }
     
     return false;
+}
+
+void Debugger::remove_temp_breakpoint()
+{
+     for (size_t i = 0; i < breakpoint_count_; i++) {
+        if (breakpoints_[i].temporary) {
+            // Сдвигаем остальные точки
+            for (size_t j = i; j < breakpoint_count_ - 1; j++) {
+                breakpoints_[j] = breakpoints_[j + 1];
+            }
+            breakpoint_count_--;
+            breakpoints_[breakpoint_count_] = Breakpoint();
+        }
+    }   
 }
 
 std::string Debugger::list_breakpoints() const {
@@ -168,29 +428,28 @@ bool Debugger::check_breakpoint(uint16_t address) const {
 
 // ============ ЗАХВАТ СОСТОЯНИЯ ============
 
-void Debugger::capture_state(Z80EX_CONTEXT *cpu, uint8_t *memory) {
-    if (!cpu || !memory) return;
+CPUState* Debugger::capture_state() {
     
     CPUState &state = history_[history_index_];
     
     // Регистры
-    state.pc = z80ex_get_reg(cpu, regPC);
-    state.sp = z80ex_get_reg(cpu, regSP);
-    state.af = z80ex_get_reg(cpu, regAF);
-    state.bc = z80ex_get_reg(cpu, regBC);
-    state.de = z80ex_get_reg(cpu, regDE);
-    state.hl = z80ex_get_reg(cpu, regHL);
-    state.af_ = z80ex_get_reg(cpu, regAF_);
-    state.bc_ = z80ex_get_reg(cpu, regBC_);
-    state.de_ = z80ex_get_reg(cpu, regDE_);
-    state.hl_ = z80ex_get_reg(cpu, regHL_);
-    state.ix = z80ex_get_reg(cpu, regIX);
-    state.iy = z80ex_get_reg(cpu, regIY);
-    state.i = z80ex_get_reg(cpu, regI);
-    state.r = z80ex_get_reg(cpu, regR);
-    state.im = z80ex_get_reg(cpu, regIM);
-    state.iff1 = z80ex_get_reg(cpu, regIFF1);
-    state.iff2 = z80ex_get_reg(cpu, regIFF2);
+    state.pc    = z80ex_get_reg(cpu_, regPC);
+    state.sp    = z80ex_get_reg(cpu_, regSP);
+    state.af    = z80ex_get_reg(cpu_, regAF);
+    state.bc    = z80ex_get_reg(cpu_, regBC);
+    state.de    = z80ex_get_reg(cpu_, regDE);
+    state.hl    = z80ex_get_reg(cpu_, regHL);
+    state.af_   = z80ex_get_reg(cpu_, regAF_);
+    state.bc_   = z80ex_get_reg(cpu_, regBC_);
+    state.de_   = z80ex_get_reg(cpu_, regDE_);
+    state.hl_   = z80ex_get_reg(cpu_, regHL_);
+    state.ix    = z80ex_get_reg(cpu_, regIX);
+    state.iy    = z80ex_get_reg(cpu_, regIY);
+    state.i     = z80ex_get_reg(cpu_, regI);
+    state.r     = z80ex_get_reg(cpu_, regR);
+    state.im    = z80ex_get_reg(cpu_, regIM);
+    state.iff1  = z80ex_get_reg(cpu_, regIFF1);
+    state.iff2  = z80ex_get_reg(cpu_, regIFF2);
     
     // Флаги
     uint8_t f = state.af & 0xFF;
@@ -203,27 +462,38 @@ void Debugger::capture_state(Z80EX_CONTEXT *cpu, uint8_t *memory) {
     state.flags.n = (f >> 1) & 1;
     state.flags.c = f & 1;
     
-    // Дизассемблируем текущую инструкцию
-    state.len = disassemble_instruction(state.pc, memory, state.instruction.data(), state.instruction.size());
+    // Используем новый метод для форматирования инструкции
+    std::string disasm = format_disasm_line(state.pc, true);
+    strncpy(state.instruction.data(), disasm.c_str(), state.instruction.size() - 1);
+    state.instruction[state.instruction.size() - 1] = '\0';
+    
+    // Получаем длину инструкции (находим первый пробел в байтах)
+    size_t space_pos = disasm.find(' ');
+    if (space_pos != std::string::npos) {
+        // Подсчитываем количество байтов
+        std::string bytes_part = disasm.substr(0, space_pos);
+        state.len = (std::count(bytes_part.begin(), bytes_part.end(), ' ') + 1) / 2;
+    } else {
+        state.len = 1; // минимальная длина
+    }
     
     // Сдвигаем кольцевой буфер
     history_index_ = (history_index_ + 1) % history_.size();
     if (history_count_ < history_.size()) {
         history_count_++;
     }
+    
+    return &state;
 }
 
 // ============ КОМПАКТНЫЙ ЛОГ ============
-
-void Debugger::log_compact(Z80EX_CONTEXT *cpu, uint8_t *memory) {
-    if (!cpu) return;
-    
-    uint16_t pc = z80ex_get_reg(cpu, regPC);
-    uint16_t sp = z80ex_get_reg(cpu, regSP);
-    uint16_t af = z80ex_get_reg(cpu, regAF);
-    uint16_t bc = z80ex_get_reg(cpu, regBC);
-    uint16_t de = z80ex_get_reg(cpu, regDE);
-    uint16_t hl = z80ex_get_reg(cpu, regHL);
+void Debugger::log_compact() {
+    uint16_t pc = z80ex_get_reg(cpu_, regPC);
+    uint16_t sp = z80ex_get_reg(cpu_, regSP);
+    uint16_t af = z80ex_get_reg(cpu_, regAF);
+    uint16_t bc = z80ex_get_reg(cpu_, regBC);
+    uint16_t de = z80ex_get_reg(cpu_, regDE);
+    uint16_t hl = z80ex_get_reg(cpu_, regHL);
     
     // Флаги из AF
     uint8_t f = af & 0xFF;
@@ -237,32 +507,38 @@ void Debugger::log_compact(Z80EX_CONTEXT *cpu, uint8_t *memory) {
     flags[6] = (f & 0x02) ? 'N' : '.';
     flags[7] = (f & 0x01) ? 'C' : '.';
     
-    // Дизассемблируем текущую инструкцию
-    std::array<char, 32> instruction;
-    disassemble_instruction(pc, memory, instruction.data(), instruction.size());
+    // Используем тот же метод для дизассемблирования
+    std::string disasm_line = format_disasm_line(pc, false);
     
-    ibuffer.printf("[%04X] %-20s | PC:%04X SP:%04X AF:%04X BC:%04X DE:%04X HL:%04X | %s\n",
-           pc, instruction.data(),
-           pc, sp, af, bc, de, hl, flags.c_str());
+    // Убираем лишние пробелы в начале (префикс "  " или " >")
+    std::string clean_disasm = disasm_line;
+    if (clean_disasm.size() > 2 && clean_disasm[0] == ' ' && 
+        (clean_disasm[1] == ' ' || clean_disasm[1] == '>')) {
+        clean_disasm = clean_disasm.substr(2);
+    }
+    ibuffer.println(disasm_line.c_str());
+    // Выводим дизассемблированную строку и регистры справа
+    //ibuffer.printf("%-48s | PC:%04X SP:%04X AF:%04X BC:%04X DE:%04X HL:%04X | %s\n",
+    //       clean_disasm.c_str(),
+    //       pc, sp, af, bc, de, hl, flags.c_str());
 }
 
 // ============ УТИЛИТЫ ============
 
-std::string Debugger::print_registers(Z80EX_CONTEXT *cpu) {
-    if (!cpu) return "";
+std::string Debugger::print_registers() {
     
-    uint16_t pc = z80ex_get_reg(cpu, regPC);
-    uint16_t sp = z80ex_get_reg(cpu, regSP);
-    uint16_t af = z80ex_get_reg(cpu, regAF);
-    uint16_t bc = z80ex_get_reg(cpu, regBC);
-    uint16_t de = z80ex_get_reg(cpu, regDE);
-    uint16_t hl = z80ex_get_reg(cpu, regHL);
-    uint16_t ix = z80ex_get_reg(cpu, regIX);
-    uint16_t iy = z80ex_get_reg(cpu, regIY);
-    uint16_t af_ = z80ex_get_reg(cpu, regAF_);
-    uint16_t bc_ = z80ex_get_reg(cpu, regBC_);
-    uint16_t de_ = z80ex_get_reg(cpu, regDE_);
-    uint16_t hl_ = z80ex_get_reg(cpu, regHL_);
+    uint16_t pc  = z80ex_get_reg(cpu_, regPC);
+    uint16_t sp  = z80ex_get_reg(cpu_, regSP);
+    uint16_t af  = z80ex_get_reg(cpu_, regAF);
+    uint16_t bc  = z80ex_get_reg(cpu_, regBC);
+    uint16_t de  = z80ex_get_reg(cpu_, regDE);
+    uint16_t hl  = z80ex_get_reg(cpu_, regHL);
+    uint16_t ix  = z80ex_get_reg(cpu_, regIX);
+    uint16_t iy  = z80ex_get_reg(cpu_, regIY);
+    uint16_t af_ = z80ex_get_reg(cpu_, regAF_);
+    uint16_t bc_ = z80ex_get_reg(cpu_, regBC_);
+    uint16_t de_ = z80ex_get_reg(cpu_, regDE_);
+    uint16_t hl_ = z80ex_get_reg(cpu_, regHL_);
     
     // Флаги
     uint8_t f = af & 0xFF;
@@ -296,34 +572,27 @@ std::string Debugger::print_registers(Z80EX_CONTEXT *cpu) {
     return oss.str();
 }
 
-int Debugger::print_current_instruction(Z80EX_CONTEXT *cpu, uint8_t *memory, char *buffer, int max_len) {
-    if (!cpu || !memory || !buffer || max_len <= 0) {
+int Debugger::print_current_instruction(char *buffer, int max_len) {
+    if (!cpu_ || !memory_ || !buffer || max_len <= 0) {
         if (buffer && max_len > 0) buffer[0] = '\0';
         return 0;
     }
     
-    uint16_t pc = z80ex_get_reg(cpu, regPC);
+    uint16_t pc = z80ex_get_reg(cpu_, regPC);
     std::array<char, 64> dasm_buffer;
     int t1, t2;
     
-    int len = z80ex_dasm(dasm_buffer.data(), dasm_buffer.size(), 0, &t1, &t2,
-                         dasm_read_byte, pc, memory);
+    int len = z80ex_dasm_local(dasm_buffer.data(), dasm_buffer.size(), 0, &t1, &t2,
+                         dasm_read_byte, pc, memory_);
     
     snprintf(buffer, max_len, "[%04X] %s", pc, dasm_buffer.data());
     return len;
 }
 
-std::string Debugger::print_status(Z80EX_CONTEXT *cpu) const {
-    if (!cpu) return "";
+std::string Debugger::print_status() const {
+    if (!cpu_) return "";
     
-    const char *mode_str;
-    switch (mode_) {
-        case DebugMode::RUN: mode_str = "RUN"; break;
-        case DebugMode::TRACE: mode_str = "TRACE"; break;
-        case DebugMode::STEP: mode_str = "STEP"; break;
-        case DebugMode::PAUSE: mode_str = "PAUSED"; break;
-        default: mode_str = "UNKNOWN";
-    }
+    const char *mode_str = mode_to_str(mode_);
     
     std::ostringstream oss;
     oss << "=== DEBUGGER STATUS ===\n"
@@ -337,12 +606,12 @@ std::string Debugger::print_status(Z80EX_CONTEXT *cpu) const {
 }
 
 // ============ ПРОСМОТР ПАМЯТИ ============
-std::string Debugger::memory_dump(uint8_t *memory, uint16_t start, uint16_t length) {
+std::string Debugger::memory_dump(uint16_t start, uint16_t length) {
     auto start_mmu = dasm_translate_address(start, ECycle::MRD);
-    return memory_wb_dump(memory, start_mmu, length);
+    return memory_wb_dump(start_mmu, length);
 }
-std::string Debugger::memory_wb_dump(uint8_t *memory, uint32_t start, uint16_t length) {
-    if (!memory) return "";
+std::string Debugger::memory_wb_dump(uint32_t start, uint16_t length) {
+    if (!memory_) return "";
     
     std::ostringstream oss;
     oss << "=== MEMORY DUMP " 
@@ -357,7 +626,7 @@ std::string Debugger::memory_wb_dump(uint8_t *memory, uint32_t start, uint16_t l
         for (int j = 0; j < 16; j++) {
             if (i + j < length) {
                 oss << std::hex << std::setw(2) << std::setfill('0') 
-                    << static_cast<int>(memory[start + i + j]) << " ";
+                    << static_cast<int>(memory_[start + i + j]) << " ";
             } else {
                 oss << "   ";
             }
@@ -367,7 +636,7 @@ std::string Debugger::memory_wb_dump(uint8_t *memory, uint32_t start, uint16_t l
         oss << " ";
         for (int j = 0; j < 16; j++) {
             if (i + j < length) {
-                uint8_t c = memory[start + i + j];
+                uint8_t c = memory_[start + i + j];
                 oss << ((c >= 32 && c < 127) ? static_cast<char>(c) : '.');
             }
         }
@@ -377,7 +646,7 @@ std::string Debugger::memory_wb_dump(uint8_t *memory, uint32_t start, uint16_t l
     return oss.str();
 }
 
-std::string Debugger::disassemble_range(uint8_t *memory, uint16_t start, uint16_t dislen) {
+std::string Debugger::disassemble_range(uint16_t start, uint16_t dislen) {
     if (dislen <= 0) return "";
     auto end = start + dislen;
     std::ostringstream oss;
@@ -390,8 +659,8 @@ std::string Debugger::disassemble_range(uint8_t *memory, uint16_t start, uint16_
         std::array<char, 64> dasm_buffer;
         int t1, t2;
         
-        int len = z80ex_dasm(dasm_buffer.data(), dasm_buffer.size(), 0, &t1, &t2,
-                            dasm_read_byte, addr, memory);
+        int len = z80ex_dasm_local(dasm_buffer.data(), dasm_buffer.size(), 0, &t1, &t2,
+                            dasm_read_byte, addr, memory_);
         
         if (len == 0) break;
         
@@ -401,7 +670,7 @@ std::string Debugger::disassemble_range(uint8_t *memory, uint16_t start, uint16_
         // Байты инструкции
         for (int i = 0; i < len; i++) {
             oss << std::hex << std::setw(2) << std::setfill('0') 
-                << static_cast<int>(memory[addr + i]) << " ";
+                << static_cast<int>(memory_[addr + i]) << " ";
         }
         
         // Выравнивание
@@ -419,15 +688,14 @@ std::string Debugger::disassemble_range(uint8_t *memory, uint16_t start, uint16_
 
 // ============ ОБНОВЛЕНИЕ СОСТОЯНИЯ ============
 
-bool Debugger::update(Z80EX_CONTEXT *cpu, uint8_t *memory) {
-    if (!cpu || !memory) return false;
+bool Debugger::update() {
     
     // Если в режиме паузы - ничего не делаем
     if (mode_ == DebugMode::PAUSE) {
         return false;
     }
     
-    uint16_t pc = z80ex_get_reg(cpu, regPC);
+    uint16_t pc = z80ex_get_reg(cpu_, regPC);
     
     // Проверяем точки останова
     if (check_breakpoint(pc)) {
@@ -438,44 +706,82 @@ bool Debugger::update(Z80EX_CONTEXT *cpu, uint8_t *memory) {
     }
     
     // В режиме STEP: захватываем текущее состояние, выполняем одну инструкцию и переходим в паузу
-    if (mode_ == DebugMode::STEP) {
+    if (mode_ == DebugMode::STEP ) {
         // Сохраняем состояние ДО выполнения инструкции
-        capture_state(cpu, memory);
+        auto state_ptr = capture_state();
         
         // Выполняем одну инструкцию
-        int cycles = z80ex_step(cpu);
+        int cycles = z80ex_step(cpu_);
         total_cycles_ += cycles;
         instruction_count_++;
         
         // Показываем инструкцию в консоли
-        log_compact(cpu, memory);
+        log_compact();
         
         mode_ = DebugMode::PAUSE;
         should_update_screen_ = true;
+
+
+
+        return true;
+    }
+    
+    // exit from function
+    if (mode_ == DebugMode::STEP_OUT) {
+        // Сохраняем состояние ДО выполнения инструкции
+        auto state_ptr = capture_state();
+        
+        // Выполняем одну инструкцию
+        int cycles = z80ex_step(cpu_);
+        total_cycles_ += cycles;
+        instruction_count_++;
+        
+        // step out waiting the RET instruction and switch to 
+        if (state_ptr == NULL || state_ptr->i == 0xC9) {
+            should_update_screen_ = true;
+            mode_ == DebugMode::STEP;
+        }
+        return true;
+    }
+
+    if (mode_ == DebugMode::STEP_OVER) {
+        // Сохраняем состояние ДО выполнения инструкции
+        capture_state();
+        
+        // Выполняем одну инструкцию
+        int cycles = z80ex_step(cpu_);
+        total_cycles_ += cycles;
+        instruction_count_++;
+        
+        // В режиме TRACE показываем инструкцию
+        log_compact();
+        should_update_screen_ = true;
+
         return true;
     }
     
     // В режиме TRACE: захватываем состояние, выполняем инструкцию, но остаемся в TRACE
     if (mode_ == DebugMode::TRACE) {
         // Сохраняем состояние ДО выполнения инструкции
-        capture_state(cpu, memory);
+        capture_state();
         
         // Выполняем одну инструкцию
-        int cycles = z80ex_step(cpu);
+        int cycles = z80ex_step(cpu_);
         total_cycles_ += cycles;
         instruction_count_++;
         
         // В режиме TRACE показываем инструкцию
-        log_compact(cpu, memory);
+        log_compact();
         should_update_screen_ = true;
-        
+
         return true;
     }
-    
+  
+
     // Режим RUN
-    if (mode_ == DebugMode::RUN) {
+    if (mode_ == DebugMode::RUN)  {
         for (int i = 0; i < 2000; i++) {
-            int cycles = z80ex_step(cpu);
+            int cycles = z80ex_step(cpu_);
             total_cycles_ += cycles;
             instruction_count_++;
         }
@@ -485,34 +791,103 @@ bool Debugger::update(Z80EX_CONTEXT *cpu, uint8_t *memory) {
     return false;
 }
 
+bool Debugger::is_likely_address(uint16_t value) const {
+    // Исключаем очевидные не-адреса
+    if (value == 0) return false;
+    
+    // Проверяем диапазоны памяти (для Z80 обычно 0x0000-0xFFFF)
+    // Но для вашей системы с MMU - может быть иначе
+    if (value > 0xFFFF) return false;  // 16-битный адрес
+    
+    // Дополнительные проверки:
+    // 1. Адрес выровнен? (необязательно, но может помочь)
+    // 2. Попадает ли в области памяти программы?
+    
+    // Простая эвристика: если в символе есть точное совпадение или близкое
+    // ИЛИ адрес в диапазоне, где обычно размещается код/данные
+    uint16_t aligned = value & 0xFFF0; // Выровнять по 16 байтам
+    
+    // Проверяем основные диапазоны вашей системы:
+    // 0x0000-0x3FFF - обычно ROM/BIOS
+    // 0x4000-0x7FFF - обычно RAM
+    // 0x8000-0xBFFF - обычно RAM
+    // 0xC000-0xFFFF - обычно RAM/видео/порты
+    
+    // Для начала просто возвращаем true для всех не-нулевых значений
+    // так как false-отрицательные хуже false-положительных
+    return value != 0;
+}
+
+std::string Debugger::get_symbol_near(uint16_t addr) {
+    if (!is_likely_address(addr)) {
+        return "";
+    }
+    
+    // Ищем точное совпадение
+    auto symbol = sym_parser_.get_symbol(addr);
+    if (symbol) {
+        return symbol->name;
+    }
+    
+    // Ищем близкое совпадение (в пределах функции)
+    std::string near_sym = sym_parser_.get_name(addr, 256); // ±256 байт
+    
+    // Фильтруем мусор - слишком длинные имена могут быть ошибочными
+    if (!near_sym.empty()) {
+        // Проверяем, не слишком ли большое смещение?
+        // Формат может быть "имя+число" или "имя-число"
+        size_t plus_pos = near_sym.find('+');
+        size_t minus_pos = near_sym.find('-');
+        
+        if (plus_pos != std::string::npos || minus_pos != std::string::npos) {
+            // Есть смещение, проверяем его величину
+            std::string offset_str;
+            if (plus_pos != std::string::npos) {
+                offset_str = near_sym.substr(plus_pos + 1);
+            } else {
+                offset_str = near_sym.substr(minus_pos + 1);
+            }
+            
+            try {
+                int offset = std::stoi(offset_str);
+                // Если смещение слишком большое - игнорируем
+                if (abs(offset) > 1024) { // 1KB - разумный предел для функции
+                    return "";
+                }
+            } catch (...) {
+                // Не смогли распарсить число
+            }
+        }
+    }
+    
+    return near_sym;
+}
 // ============ РЕНДЕРИНГ В БУФЕР ============
 
-std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
-    if (!cpu || !memory) return "";
-    
+std::string Debugger::render_to_buffer() {
     const size_t BUFFER_SIZE = 2048;
     std::array<char, BUFFER_SIZE> buffer;
     BufferPrinter bp;
     bp_init(&bp, buffer.data(), buffer.size());
     
     // Получаем текущие регистры
-    uint16_t pc = z80ex_get_reg(cpu, regPC);
-    uint16_t sp = z80ex_get_reg(cpu, regSP);
-    uint16_t af = z80ex_get_reg(cpu, regAF);
-    uint16_t bc = z80ex_get_reg(cpu, regBC);
-    uint16_t de = z80ex_get_reg(cpu, regDE);
-    uint16_t hl = z80ex_get_reg(cpu, regHL);
-    uint16_t ix = z80ex_get_reg(cpu, regIX);
-    uint16_t iy = z80ex_get_reg(cpu, regIY);
-    uint16_t af_ = z80ex_get_reg(cpu, regAF_);
-    uint16_t bc_ = z80ex_get_reg(cpu, regBC_);
-    uint16_t de_ = z80ex_get_reg(cpu, regDE_);
-    uint16_t hl_ = z80ex_get_reg(cpu, regHL_);
-    uint8_t i = z80ex_get_reg(cpu, regI);
-    uint8_t r = z80ex_get_reg(cpu, regR);
-    uint8_t im = z80ex_get_reg(cpu, regIM);
-    uint8_t iff1 = z80ex_get_reg(cpu, regIFF1);
-    uint8_t iff2 = z80ex_get_reg(cpu, regIFF2);
+    uint16_t pc  = z80ex_get_reg(cpu_, regPC);
+    uint16_t sp  = z80ex_get_reg(cpu_, regSP);
+    uint16_t af  = z80ex_get_reg(cpu_, regAF);
+    uint16_t bc  = z80ex_get_reg(cpu_, regBC);
+    uint16_t de  = z80ex_get_reg(cpu_, regDE);
+    uint16_t hl  = z80ex_get_reg(cpu_, regHL);
+    uint16_t ix  = z80ex_get_reg(cpu_, regIX);
+    uint16_t iy  = z80ex_get_reg(cpu_, regIY);
+    uint16_t af_ = z80ex_get_reg(cpu_, regAF_);
+    uint16_t bc_ = z80ex_get_reg(cpu_, regBC_);
+    uint16_t de_ = z80ex_get_reg(cpu_, regDE_);
+    uint16_t hl_ = z80ex_get_reg(cpu_, regHL_);
+    uint8_t i    = z80ex_get_reg(cpu_, regI);
+    uint8_t r    = z80ex_get_reg(cpu_, regR);
+    uint8_t im   = z80ex_get_reg(cpu_, regIM);
+    uint8_t iff1 = z80ex_get_reg(cpu_, regIFF1);
+    uint8_t iff2 = z80ex_get_reg(cpu_, regIFF2);
     
     // Получаем флаги
     uint8_t f = af & 0xFF;
@@ -530,12 +905,12 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
     
     // Получаем байты для регистров, указывающих на память
     std::array<uint8_t, 2> sp_bytes, bc_bytes, de_bytes, hl_bytes, ix_bytes, iy_bytes;
-    get_bytes_at_address(memory, sp, sp_bytes.data(), 2);
-    get_bytes_at_address(memory, bc, bc_bytes.data(), 2);
-    get_bytes_at_address(memory, de, de_bytes.data(), 2);
-    get_bytes_at_address(memory, hl, hl_bytes.data(), 2);
-    get_bytes_at_address(memory, ix, ix_bytes.data(), 2);
-    get_bytes_at_address(memory, iy, iy_bytes.data(), 2);
+    get_bytes_at_address(sp, sp_bytes.data(), 2);
+    get_bytes_at_address(bc, bc_bytes.data(), 2);
+    get_bytes_at_address(de, de_bytes.data(), 2);
+    get_bytes_at_address(hl, hl_bytes.data(), 2);
+    get_bytes_at_address(ix, ix_bytes.data(), 2);
+    get_bytes_at_address(iy, iy_bytes.data(), 2);
     
     // Статус дебаггера
     bp_println(&bp, "");
@@ -549,8 +924,8 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
         default: mode_str = "UNKNOWN";
     }
     
-    bp_println_color(&bp, COLOR_CYAN, ">> XI Aleste DBG | MODE: %s | BP: %zu | INS: %llu\n",
-                   mode_str, breakpoint_count_, instruction_count_);
+    bp_println_color(&bp, COLOR_CYAN, ">> XI Aleste DBG | MODE: %s | BP: %zu | INS: %llu SYM: `%s`\n",
+                   mode_str, breakpoint_count_, instruction_count_, current_sym_file_.c_str());
 
     bp_println_color(&bp, COLOR_LIME, "SLT %02X USER %02X SUPER %02X", 
                    g_mmu.get_current_slot_reg(), 
@@ -565,7 +940,8 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
 
     // 1. Первая строка: PC и состояние прерываний
     const char *di_ei = (iff1 == 0) ? "DI" : "EI";
-    bp_println_color(&bp, COLOR_RED, "PC  %04X %s I=%02X", pc, di_ei, i);
+    auto pc_sym = get_symbol_near(pc); 
+    bp_println_color(&bp, COLOR_RED, "PC  %04X %s I=%02X %s", pc, di_ei, i, pc_sym.c_str());
     
     // 2. Регистр SP с байтами
     bp_println_color(&bp, COLOR_GRAY_C0, "SP  %04X %02X%02X %c%c", 
@@ -580,32 +956,40 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
                    flags.data());
 
     // 4. Регистры BC, DE, HL, IX
-    bp_println_color(&bp, COLOR_WHITE, "BC  %04X %02X%02X %c%c",
-                   bc, bc_bytes[0], bc_bytes[1],
-                   get_char_from_byte(bc_bytes[0]),
-                   get_char_from_byte(bc_bytes[1]));
+    auto bc_sym = get_symbol_near(bc); 
+    bp_println_color(&bp, COLOR_WHITE, "BC  %04X %02X%02X %c%c %s",
+                bc, bc_bytes[0], bc_bytes[1],
+                get_char_from_byte(bc_bytes[0]),
+                get_char_from_byte(bc_bytes[1]),
+                bc_sym.c_str());
 
-    bp_println_color(&bp, COLOR_WHITE, "DE  %04X %02X%02X %c%c",
-                   de, de_bytes[0], de_bytes[1],
-                   get_char_from_byte(de_bytes[0]),
-                   get_char_from_byte(de_bytes[1]));
+    auto de_sym = get_symbol_near(de); 
+    bp_println_color(&bp, COLOR_WHITE, "DE  %04X %02X%02X %c%c %s",
+                de, de_bytes[0], de_bytes[1],
+                get_char_from_byte(de_bytes[0]),
+                get_char_from_byte(de_bytes[1]),
+                de_sym.c_str());
 
-    bp_println_color(&bp, COLOR_WHITE, "HL  %04X %02X%02X %c%c",
-                   hl, hl_bytes[0], hl_bytes[1],
-                   get_char_from_byte(hl_bytes[0]),
-                   get_char_from_byte(hl_bytes[1]));
+    auto hl_sym = get_symbol_near(hl); 
+    bp_println_color(&bp, COLOR_WHITE, "HL  %04X %02X%02X %c%c %s",
+                hl, hl_bytes[0], hl_bytes[1],
+                get_char_from_byte(hl_bytes[0]),
+                get_char_from_byte(hl_bytes[1]),
+                hl_sym.c_str());
 
-    bp_println_color(&bp, COLOR_WHITE, "IX  %04X %02X%02X %c%c",
-                   ix, ix_bytes[0], ix_bytes[1],
-                   get_char_from_byte(ix_bytes[0]),
-                   get_char_from_byte(ix_bytes[1]));
+    auto ix_sym = get_symbol_near(ix); 
+    bp_println_color(&bp, COLOR_WHITE, "IX  %04X %02X%02X %c%c %s",
+                ix, ix_bytes[0], ix_bytes[1],
+                get_char_from_byte(ix_bytes[0]),
+                get_char_from_byte(ix_bytes[1]),
+                ix_sym.c_str());
 
     // 5. Альтернативные регистры
     std::array<uint8_t, 2> af_bytes, bc__bytes, de__bytes, hl__bytes;
-    get_bytes_at_address(memory, af_, af_bytes.data(), 2);
-    get_bytes_at_address(memory, bc_, bc__bytes.data(), 2);
-    get_bytes_at_address(memory, de_, de__bytes.data(), 2);
-    get_bytes_at_address(memory, hl_, hl__bytes.data(), 2);
+    get_bytes_at_address(af_, af_bytes.data(), 2);
+    get_bytes_at_address(bc_, bc__bytes.data(), 2);
+    get_bytes_at_address(de_, de__bytes.data(), 2);
+    get_bytes_at_address(hl_, hl__bytes.data(), 2);
     
     uint8_t f_ = af_ & 0xFF;
     std::array<char, 9> flags_ = {
@@ -625,31 +1009,36 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
                    get_char_from_byte((af_ >> 8) & 0xFF),
                    flags_.data());
     
-    bp_println_color(&bp, COLOR_GRAY_C0, "BC` %04X %02X%02X %c%c",
+    auto bc_sym_ = get_symbol_near(bc); 
+    bp_println_color(&bp, COLOR_GRAY_C0, "BC` %04X %02X%02X %c%c %s",
                    bc_, bc__bytes[0], bc__bytes[1],
                    get_char_from_byte(bc__bytes[0]),
-                   get_char_from_byte(bc__bytes[1]));
+                   get_char_from_byte(bc__bytes[1]),
+                   bc_sym_.c_str()
+                );
 
-    bp_println_color(&bp, COLOR_GRAY_C0, "DE` %04X %02X%02X %c%c",
+    auto de_sym_ = get_symbol_near(de); 
+    bp_println_color(&bp, COLOR_GRAY_C0, "DE` %04X %02X%02X %c%c %s",
                    de_, de__bytes[0], de__bytes[1],
                    get_char_from_byte(de__bytes[0]),
-                   get_char_from_byte(de__bytes[1]));
+                   get_char_from_byte(de__bytes[1]),
+                   de_sym_.c_str());
 
-    bp_println_color(&bp, COLOR_GRAY_C0, "HL` %04X %02X%02X %c%c",
+    auto hl_sym_ = get_symbol_near(hl); 
+    bp_println_color(&bp, COLOR_GRAY_C0, "HL` %04X %02X%02X %c%c %s",
                    hl_, hl__bytes[0], hl__bytes[1],
                    get_char_from_byte(hl__bytes[0]),
-                   get_char_from_byte(hl__bytes[1]));
+                   get_char_from_byte(hl__bytes[1]),
+                   hl_sym_.c_str());
 
     bp_println(&bp, ""); // Пустая строка
     
     // 6. Дизассемблер
     bp_println_color(&bp, COLOR_CYAN, "DISASSEMBLER:");
     
-
-    // Показываем предыдущие инструкции из истории
+// История - 2 предыдущие инструкции
     if (history_count_ > 0) {
-        int history_lines = 2;
-        int history_to_show = (history_count_ < history_lines) ? static_cast<int>(history_count_) : history_lines;
+        int history_to_show = std::min(2, static_cast<int>(history_count_));
         
         for (int i = 0; i < history_to_show; i++) {
             int idx = (static_cast<int>(history_index_) - history_to_show + i) % 10;
@@ -657,76 +1046,39 @@ std::string Debugger::render_to_buffer(Z80EX_CONTEXT *cpu, uint8_t *memory) {
             
             CPUState &hist_entry = history_[idx];
             
-            if (hist_entry.pc == 0 && hist_entry.instruction[0] == '\0') {
-                continue;
-            }
+            if (hist_entry.pc == 0) continue;
             
-            std::string bytes_str;
-            uint16_t hist_pc = hist_entry.pc;
-            
-            for (int j = 0; j < hist_entry.len; j++) {
-                uint8_t byte = dasm_read_byte(hist_pc + j, 0);
-                char byte_hex[4];
-                snprintf(byte_hex, sizeof(byte_hex), "%02X", byte);
-                bytes_str += byte_hex;
-            }
-            
-            auto full_hist_pc = dasm_translate_address(hist_entry.pc, ECycle::MRD);
-            bp_print(&bp, "  %06X %-8s %s", full_hist_pc, bytes_str.c_str(), hist_entry.instruction.data());
-            bp_println(&bp, "");
+            // Для истории используем is_current=false
+            std::string hist_line = format_disasm_line(hist_entry.pc, false);
+            bp_println(&bp, "%s", hist_line.c_str());
         }
     }
     
-    // Текущая команда
-    std::array<char, 64> current_dasm;
+    // Текущая инструкция
+    uint16_t current_pc = z80ex_get_reg(cpu_, regPC);
+    std::string current_line = format_disasm_line(current_pc, true);
+    bp_println_color(&bp, COLOR_YELLOW, "%s", current_line.c_str());
+    
+    // Следующие инструкции
+    std::array<char, 64> dasm_buffer;
     int t1, t2;
-    int current_len = z80ex_dasm(current_dasm.data(), current_dasm.size(), 0, &t1, &t2,
-                                dasm_read_byte, pc, 0);
+    int current_len = z80ex_dasm_local(dasm_buffer.data(), dasm_buffer.size(), 0, 
+                                       &t1, &t2, dasm_read_byte, current_pc, 0);
     
     if (current_len > 0) {
-        std::string current_bytes_str;
-        for (int j = 0; j < current_len && j < 4; j++) {
-            char byte_hex[4];
-            auto data = dasm_read_byte(pc + j, 0);
-            snprintf(byte_hex, sizeof(byte_hex), "%02X", data);
-            current_bytes_str += byte_hex;
-        }
-        
-        while (current_bytes_str.length() < 8) {
-            current_bytes_str += " ";
-        }
-        
-        auto full_pc = dasm_translate_address(pc, ECycle::MRD);
-        bp_println_color(&bp, COLOR_YELLOW, " >%06X %s %s", full_pc, current_bytes_str.c_str(), current_dasm.data());
-        
-        // Показываем следующие команды
-        uint16_t next_pc = pc + current_len;
+        uint16_t next_pc = current_pc + current_len;
         int next_to_show = 4;
         
         for (int i = 0; i < next_to_show; i++) {
-            std::array<char, 64> next_dasm;
-            int t1_next, t2_next;
-            int next_len = z80ex_dasm(next_dasm.data(), next_dasm.size(), 0, &t1_next, &t2_next,
-                                     dasm_read_byte, next_pc, 0);
+            // Для следующих инструкций используем is_current=false
+            std::string next_line = format_disasm_line(next_pc, false);
             
+            // Получаем длину следующей инструкции
+            int next_len = z80ex_dasm_local(dasm_buffer.data(), dasm_buffer.size(), 0, 
+                                           &t1, &t2, dasm_read_byte, next_pc, 0);
             if (next_len == 0) break;
             
-            std::string next_bytes_str;
-            for (int j = 0; j < next_len && j < 4; j++) {
-                char byte_hex[4];
-                auto data = dasm_read_byte(next_pc + j, 0);
-                snprintf(byte_hex, sizeof(byte_hex), "%02X", data);
-                next_bytes_str += byte_hex;
-            }
-            
-            while (next_bytes_str.length() < 8) {
-                next_bytes_str += " ";
-            }
-            
-            auto full_next_pc = dasm_translate_address(next_pc, ECycle::MRD);
-            bp_print(&bp, "  %06X %s %s", full_next_pc, next_bytes_str.c_str(), next_dasm.data());
-            bp_println(&bp, "");
-            
+            bp_println(&bp, "%s", next_line.c_str());
             next_pc += next_len;
         }
     }

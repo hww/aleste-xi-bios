@@ -34,7 +34,7 @@ extern vbuf_activate_driver
 extern vbuf_get_current_vtable
 
 ; Конкретные драйверы
-extern _drv_16k1b_vtable
+extern __drv_16k1b_vtable
 
 ; Макросы для удобства
 macro VBUF_INIT

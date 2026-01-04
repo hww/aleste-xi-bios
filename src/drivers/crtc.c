@@ -5,6 +5,14 @@
 extern void _crtc_command;
 extern void _crtc_set_mode;
 extern void _crtc_set_view;
+extern void _crtc_install;
+
+// 2. Установка адреса отображения
+void crtc_install() __naked {
+    __asm
+        jp __crtc_install
+    __endasm;
+}
 
 // 1. Установка режима
 void crtc_set_mode(crtc_mode_t mode) __z88dk_fastcall __naked {

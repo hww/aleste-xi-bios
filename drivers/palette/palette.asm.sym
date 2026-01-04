@@ -1,0 +1,16 @@
+DEPENDS_ON                      = $0000 ; addr, local, , , DRV_DATA, drivers/palette/palette.asm:44
+__palette_activate_driver       = $0000 ; addr, public, , , DRV_CODE, drivers/palette/palette.asm:71
+__palette_command               = $0009 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:31
+__palette_detect                = $0000 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:28
+__palette_get_current_vtable    = $000D ; addr, public, , , DRV_CODE, drivers/palette/palette.asm:81
+__palette_get_info              = $0006 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:30
+__palette_install               = $0003 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:29
+__palette_load                  = $0015 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:35
+__palette_set_border            = $0012 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:34
+__palette_set_color             = $000F ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:33
+__palette_uninstall             = $000C ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:32
+__palette_vtable                = $0000 ; addr, public, , , DRV_VTABLE, drivers/palette/palette.asm:27
+__palette_vtable_end            = $0018 ; addr, local, , , DRV_VTABLE, drivers/palette/palette.asm:36
+_palette_info@name              = $0009 ; addr, local, , , DRV_DATA, drivers/palette/palette.asm:59
+_palette_info                   = $0001 ; addr, local, , , DRV_DATA, drivers/palette/palette.asm:53
+current_driver                  = $0024 ; addr, local, , , DRV_DATA, drivers/palette/palette.asm:87

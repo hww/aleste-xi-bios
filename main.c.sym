@@ -1,0 +1,2 @@
+_main                           = $0000 ; addr, public, , , code_compiler, main.c:306
+l_main_00102                    = $002C ; addr, local, , , code_compiler, main.c:332

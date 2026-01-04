@@ -1,0 +1,1 @@
+start                           = $0100 ; addr, local, , , code_crt_start, asm/crt0_aleste.asm:30

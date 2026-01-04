@@ -21,6 +21,7 @@ typedef enum {
 } crtc_mode_t;
 
 // 4. Прототипы функций
+void crtc_install() __naked;
 uint8_t crtc_detect(void);
 void    crtc_set_mode(crtc_mode_t mode) __z88dk_fastcall;
 void    crtc_set_view(uint8_t slot, uint8_t page);

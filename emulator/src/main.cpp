@@ -13,7 +13,32 @@
 #include "cli.h"
 #include "utils/minibuffer.h"
 #include "utils/ibuffer.h"
+#include "utils/z88dk_sym_parser.h"
 #include "commands.h"
+
+
+bool load_bin_file(const char* path) {
+
+    printf("Loading file %s...\n", path);
+    
+    // Загрузка BIOS
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        perror("Failed to open BIOS file");
+        return false;
+    }
+    
+    size_t bytes_read = fread(&memory[0xC00000], 1, 0x10000, f);
+    fclose(f);
+    
+    if (bytes_read == 0) {
+        ibuffer.printf("Failed to read BIOS file\n");
+        return false;
+    }
+    
+    ibuffer.printf("Loaded %zu bytes into memory\n", bytes_read);
+    return true;
+}
 
 
 
@@ -29,24 +54,12 @@ int main(int argc, char *argv[]) {
     printf("Loading file %s...\n", argv[1]);
     
     // Загрузка BIOS
-    FILE *f = fopen(argv[1], "rb");
-    if (!f) {
-        perror("Failed to open BIOS file");
+    if (!load_bin_file(argv[1])) {
         return 1;
     }
-    
-    size_t bytes_read = fread(&memory[0xC00000], 1, 0x10000, f);
-    fclose(f);
-    
-    if (bytes_read == 0) {
-        ibuffer.printf("Failed to read BIOS file\n");
-        return 1;
-    }
-    
-    ibuffer.printf("Loaded %zu bytes into memory\n", bytes_read);
-    
+
     // Инициализация CPU
-    cpu = z80ex_create(mem_read, NULL, mem_write, NULL,
+    auto cpu = z80ex_create(mem_read, NULL, mem_write, NULL,
                        port_read, NULL, port_write, NULL,
                        int_read, NULL);
     
@@ -60,15 +73,22 @@ int main(int argc, char *argv[]) {
         ibuffer.printf("Failed to initialize SDL\n");
         return 1;
     }
-    
+    debugger.init(cpu, memory);
+        
+    // Чтение в таблицы символов
+    if (argc>2) {
+        if (!debugger.load_symbols(argv[2])) {
+            return 1;
+        }
+    }
+
     // Инициализация команд дебаггера
-    init_debugger_commands(&debugger, cpu, memory);
+    init_debugger_commands(&debugger);
     
     // Установка начального состояния CPU
     z80ex_set_reg(cpu, regPC, 0x0000);
     
     ibuffer.printf("Z80 Emulator with Debugger started\n");
-    ibuffer.printf("Loaded BIOS from %s (%zu bytes)\n", argv[1], bytes_read);
     ibuffer.printf("CPU initialized, PC = 0x%04X\n", z80ex_get_reg(cpu, regPC));
     
     // Показываем справку по командам
@@ -127,10 +147,17 @@ int main(int argc, char *argv[]) {
                         case SDLK_s:
                             if (!ctrl_pressed) {
                                 debugger.step();
-                                ibuffer.printf("Debugger: Single step\n");
+                            } else {
+                                debugger.step_over();
                             }
                             break;
-                            
+
+                        case SDLK_q:
+                            if (!ctrl_pressed) {
+                                debugger.step_out();
+                            }
+                            break;
+
                         case SDLK_t:
                             debugger.trace();
                             ibuffer.printf("Debugger: Trace mode\n");
@@ -206,7 +233,7 @@ int main(int argc, char *argv[]) {
         }
         
         // Обновление дебаггера (выполнение инструкций)
-        debugger.update(cpu, memory);
+        debugger.update();
         
         // Обновление экрана с фиксированной частотой
         uint32_t current_time = SDL_GetTicks();

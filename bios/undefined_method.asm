@@ -1,6 +1,6 @@
 module undefined_method
 
-SECTION SYS_CODE
+SECTION DRV_CODE
 
 ; -----------------------------------------------------------------------------
 ; _undefined_method - Обработчик вызова неопределенного метода

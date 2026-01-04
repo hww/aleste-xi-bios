@@ -1,0 +1,8 @@
+ERR_NOT_SUPPORTED               = $0001 ; const, local, , , , /home/valery/projects/h2w/aleste-xi-bios/bios/../inc/bios/errors.inc:19
+ERR_NO_DEVICE                   = $0020 ; const, local, , , , /home/valery/projects/h2w/aleste-xi-bios/bios/../inc/bios/errors.inc:33
+ERR_TIMEOUT                     = $0004 ; const, local, , , , /home/valery/projects/h2w/aleste-xi-bios/bios/../inc/bios/errors.inc:22
+_err_no_device                  = $0007 ; addr, public, , , , bios/errors.asm:23
+_err_not_supported              = $0003 ; addr, public, , , , bios/errors.asm:16
+_err_set                        = $000F ; addr, public, , , , bios/errors.asm:39
+_err_success                    = $0000 ; addr, public, , , , bios/errors.asm:9
+_err_timeout                    = $000B ; addr, public, , , , bios/errors.asm:30

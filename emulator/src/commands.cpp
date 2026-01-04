@@ -10,8 +10,8 @@
 
 // === Вспомогательные функции ===
 
-void print_registers(Z80EX_CONTEXT* cpu) {
-    auto str = Debugger::print_registers(cpu);
+void print_registers() {
+    auto str = debugger.print_registers();
     ibuffer.printf("%s", str.c_str());
 }
 
@@ -53,71 +53,71 @@ void print_help() {
 
 // === Регистрация команд дебаггера ===
 
-void register_debugger_commands(CLI& cli, Debugger* debugger, Z80EX_CONTEXT* cpu, uint8_t* memory) {
+void register_debugger_commands(CLI& cli) {
     // Команды выполнения
     cli.register_command("r", "Run execution", 
-        [debugger](const auto& args) {
-            debugger->run();
+        [](const auto& args) {
+            debugger.run();
             ibuffer.printf("Running... (press SPACE to pause)\n");
         });
     
     cli.register_command("run", "Run execution", 
-        [debugger](const auto& args) {
-            debugger->run();
+        [](const auto& args) {
+            debugger.run();
             ibuffer.printf("Running... (press SPACE to pause)\n");
         });
     
     cli.register_command("t", "Trace execution", 
-        [debugger](const auto& args) {
-            debugger->trace();
+        [](const auto& args) {
+            debugger.trace();
             ibuffer.printf("Tracing...\n");
         });
     
     cli.register_command("trace", "Trace execution", 
-        [debugger](const auto& args) {
-            debugger->trace();
+        [](const auto& args) {
+            debugger.trace();
             ibuffer.printf("Tracing...\n");
         });
     
     cli.register_command("p", "Pause execution", 
-        [debugger](const auto& args) {
-            debugger->pause();
+        [](const auto& args) {
+            debugger.pause();
             ibuffer.printf("Paused.\n");
         });
     
     cli.register_command("pause", "Pause execution", 
-        [debugger](const auto& args) {
-            debugger->pause();
+        [](const auto& args) {
+            debugger.pause();
             ibuffer.printf("Paused.\n");
         });
     
     cli.register_command("s", "Single step", 
-        [debugger](const auto& args) {
-            debugger->step();
-            ibuffer.printf("Stepped one instruction\n");
+        [](const auto& args) {
+            debugger.step();
+            //ibuffer.printf("Stepped one instruction\n");
         });
     
     cli.register_command("step", "Single step", 
-        [debugger](const auto& args) {
-            debugger->step();
-            ibuffer.printf("Stepped one instruction\n");
+        [](const auto& args) {
+            debugger.step();
+            //ibuffer.printf("Stepped one instruction\n");
         });
     
     cli.register_command("c", "Continue execution", 
-        [debugger](const auto& args) {
-            debugger->run();
+        [](const auto& args) {
+            debugger.run();
             ibuffer.printf("Continuing execution\n");
         });
     
     cli.register_command("cont", "Continue execution", 
-        [debugger](const auto& args) {
-            debugger->run();
+        [](const auto& args) {
+            debugger.run();
             ibuffer.printf("Continuing execution\n");
         });
     
     // Команды точек останова
     cli.register_command("b", "Set breakpoint <address> [comment]", 
-        [debugger](const auto& args) {
+        [](const auto& args) {
             if (args.empty()) {
                 ibuffer.printf("Usage: b <address> [comment]\n");
                 return;
@@ -131,7 +131,7 @@ void register_debugger_commands(CLI& cli, Debugger* debugger, Z80EX_CONTEXT* cpu
             uint16_t addr = CLIUtils::hex_to_int(args[0]);
             std::string comment = args.size() > 1 ? args[1] : "User breakpoint";
             
-            if (debugger->add_breakpoint(addr, comment.c_str())) {
+            if (debugger.add_breakpoint(addr, comment.c_str())) {
                 ibuffer.printf("Breakpoint set at %04X: %s\n", addr, comment.c_str());
             } else {
                 ibuffer.printf("Failed to set breakpoint at %04X\n", addr);
@@ -139,7 +139,7 @@ void register_debugger_commands(CLI& cli, Debugger* debugger, Z80EX_CONTEXT* cpu
         });
     
     cli.register_command("db", "Delete breakpoint <address>", 
-        [debugger](const auto& args) {
+        [](const auto& args) {
             if (args.empty()) {
                 ibuffer.printf("Usage: db <address>\n");
                 return;
@@ -152,7 +152,7 @@ void register_debugger_commands(CLI& cli, Debugger* debugger, Z80EX_CONTEXT* cpu
             
             uint16_t addr = CLIUtils::hex_to_int(args[0]);
             
-            if (debugger->remove_breakpoint(addr)) {
+            if (debugger.remove_breakpoint(addr)) {
                 ibuffer.printf("Breakpoint removed at %04X\n", addr);
             } else {
                 ibuffer.printf("Breakpoint not found at %04X\n", addr);
@@ -160,32 +160,32 @@ void register_debugger_commands(CLI& cli, Debugger* debugger, Z80EX_CONTEXT* cpu
         });
     
     cli.register_command("lb", "List breakpoints", 
-        [debugger](const auto& args) {
-            auto str = debugger->list_breakpoints();
+        [](const auto& args) {
+            auto str = debugger.list_breakpoints();
             ibuffer.printf("%s", str);
         });
     
     cli.register_command("bc", "Clear all breakpoints", 
-        [debugger](const auto& args) {
-            for (int i = 0; i < debugger->breakpoint_count(); i++) {
-                debugger->breakpoint_at(i).enabled = false;
+        [](const auto& args) {
+            for (int i = 0; i < debugger.breakpoint_count(); i++) {
+                debugger.breakpoint_at(i).enabled = false;
             }
-            debugger->clear_breakpoint();
+            debugger.clear_breakpoint();
             ibuffer.printf("All breakpoints cleared\n");
         });
     
     // Статус
     cli.register_command("stat", "Show debugger status", 
-        [debugger, cpu](const auto& args) {
-            auto str = debugger->print_status(cpu);
+        [](const auto& args) {
+            auto str = debugger.print_status();
             ibuffer.printf("%s\n", str);
         });
 }
 
-void register_memory_commands(CLI& cli, uint8_t* memory) {
+void register_memory_commands(CLI& cli) {
     // Дамп памяти
     cli.register_command("dump", "Dump memory <address> [length]", 
-        [memory](const auto& args) {
+        [](const auto& args) {
             if (args.empty()) {
                 ibuffer.printf("Usage: m <address> [length]\n");
                 return;
@@ -208,12 +208,12 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
             }
             
 
-            auto str = Debugger::memory_dump(memory, addr, len);
+            auto str = debugger.memory_dump(addr, len);
             ibuffer.printf("%s", str.c_str());
         });
     
     cli.register_command("wdump", "Dump memory <address> [length]", 
-        [memory](const auto& args) {
+        [](const auto& args) {
             if (args.empty()) {
                 ibuffer.printf("Usage: dump <address> [length]\n");
                 return;
@@ -235,13 +235,13 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
                 len = CLIUtils::hex_to_int(args[1]);
             }
             
-            auto str = Debugger::memory_wb_dump(memory, addr, len);
+            auto str = debugger.memory_wb_dump(addr, len);
             ibuffer.printf("%s", str.c_str());
         });
     
     // Дизассемблирование
     cli.register_command("dis", "Disassemble <start> <end>", 
-        [memory](const auto& args) {
+        [](const auto& args) {
             if (args.size() < 2) {
                 ibuffer.printf("Usage: dis <start> <end>\n");
                 return;
@@ -256,12 +256,12 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
             uint16_t end = CLIUtils::hex_to_int(args[1]);
             
    
-            auto str = Debugger::disassemble_range(memory, start, end);
+            auto str = debugger.disassemble_range(start, end);
             ibuffer.printf("%s", str.c_str());
         });
     
     cli.register_command("wdis", "Disassemble <start> <end>", 
-        [memory](const auto& args) {
+        [](const auto& args) {
             if (args.size() < 2) {
                 ibuffer.printf("Usage: disasm <start> <end>\n");
                 return;
@@ -276,13 +276,13 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
             uint16_t end = CLIUtils::hex_to_int(args[1]);
             
            
-            auto str = Debugger::disassemble_range(memory, start, end);
+            auto str = debugger.disassemble_range(start, end);
             ibuffer.printf("%s", str.c_str());
         });
     
     // Запись в память
     cli.register_command("w", "Write byte to memory <address> <value>", 
-        [memory](const auto& args) {
+        [](const auto& args) {
             if (args.size() < 2) {
                 ibuffer.printf("Usage: w <address> <value>\n");
                 return;
@@ -301,7 +301,7 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
         });
     
     cli.register_command("fill", "Fill memory range <start> <end> <value>", 
-        [memory](const auto& args) {
+        [](const auto& args) {
             if (args.size() < 3) {
                 ibuffer.printf("Usage: fill <start> <end> <value>\n");
                 return;
@@ -329,16 +329,18 @@ void register_memory_commands(CLI& cli, uint8_t* memory) {
         });
 }
 
-void register_cpu_commands(CLI& cli, Z80EX_CONTEXT* cpu, uint8_t* memory) {  // Добавляем memory в параметры
+void register_cpu_commands(CLI& cli) {  // Добавляем memory в параметры
+    auto cpu = debugger.cpu();
+    auto memory = debugger.memory();
     // Регистры
     cli.register_command("reg", "Show registers", 
         [cpu](const auto& args) {
-            print_registers(cpu);
+            print_registers();
         });
     
     cli.register_command("registers", "Show registers", 
         [cpu](const auto& args) {
-            print_registers(cpu);
+            print_registers();
         });
     
     // Флаги
@@ -427,7 +429,8 @@ void register_cpu_commands(CLI& cli, Z80EX_CONTEXT* cpu, uint8_t* memory) {  // 
 
 // === Инициализация всех команд ===
 
-void init_debugger_commands(Debugger* debugger, Z80EX_CONTEXT* cpu, uint8_t* memory) {
+void init_debugger_commands(Debugger* debugger) {
+
     // Регистрируем команды помощи
     cli.register_command("help", "Show help", 
         [](const auto& args) { print_help(); });
@@ -436,7 +439,7 @@ void init_debugger_commands(Debugger* debugger, Z80EX_CONTEXT* cpu, uint8_t* mem
         [](const auto& args) { print_help(); });
     
     // Регистрируем остальные команды
-    register_debugger_commands(cli, debugger, cpu, memory);
-    register_memory_commands(cli, memory);
-    register_cpu_commands(cli, cpu, memory);  // Передаем memory
+    register_debugger_commands(cli);
+    register_memory_commands(cli);
+    register_cpu_commands(cli);  // Передаем memory
 }

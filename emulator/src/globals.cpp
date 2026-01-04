@@ -1,6 +1,7 @@
 #include "globals.h"
 #include "utils/minibuffer.h"
 #include "utils/ibuffer.h"
+#include "utils/z88dk_sym_parser.h"
 #include "palette.h"
 #include "crtc.h"
 #include "cli.h"
@@ -13,9 +14,10 @@
 // ============================================================
 
 Debugger debugger;
-
+Z88dkSymParser sym_parser;
 Z80EX_CONTEXT *cpu = NULL;
 
+extern Z80EX_CONTEXT *cpu;
 // ============================================================
 // Screen buffers
 // ============================================================

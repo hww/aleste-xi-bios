@@ -213,7 +213,7 @@ const uint16_t palette[] = {
     0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF   
 };
 
-void update_screen_16k1b(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start) {
+void update_screen_16k1b(uint8_t* memory, uint32_t start) {
     const int MODE_WIDTH = 640;
     const int MODE_HEIGHT = 200;
     const int BYTES_PER_LINE = MODE_WIDTH / 8;
@@ -602,20 +602,20 @@ void update_screen(Z80EX_CONTEXT *cpu, uint8_t* memory, uint32_t start, EScreenM
     // 2. Графика из памяти Z80
     switch (mode) { 
         case EScreenMode::Linear16k1b:
-            update_screen_16k1b(cpu, memory, start);
+            update_screen_16k1b(memory, start);
             break;
         default:
             break;
     }
     
     // 3. Генерация текста отладчика
-    auto str = debugger.render_to_buffer(cpu, memory);
+    auto str = debugger.render_to_buffer();
     
     // 4. Отрисовка отладчика с фоном и рамкой
     render_debugger_with_background(str.c_str(), 
-                                                   screen_buffer, 
-                                                   SDL_SCREEN_WIDTH, 
-                                                   SDL_SCREEN_HEIGHT);
+                                    screen_buffer, 
+                                    SDL_SCREEN_WIDTH, 
+                                    SDL_SCREEN_HEIGHT);
     
     // 5. Отрисовка мини-буфера
     if (minibuffer.is_visible()) {

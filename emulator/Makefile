@@ -48,7 +48,7 @@ clean:
 
 run: all
 	test/build.sh 
-	../bin/z80_emu test/test.bin
+	../bin/z80_emu test/test.bin test/test.sym
 
 debug: all
 	gdb --args ../bin/z80_emu test/test.bin

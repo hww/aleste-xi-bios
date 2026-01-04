@@ -47,11 +47,11 @@ __audio_vtable_end:
 ; ЗАВИСИМОСТИ И ДАННЫЕ
 ; -----------------------------------------------------------------------------
 
-SECTION DRV_DEPS
+SECTION DRV_DATA
 DEPENDS_ON:
     db 0  ; Конец списка
 
-SECTION DRV_DATA
+
 _audio_info:
     dw @name
     db 1, 0        ; Версия 1.0

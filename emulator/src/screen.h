@@ -60,7 +60,7 @@ void draw_char(int x, int y, char c, uint32_t color, EStyle style = EStyle::Norm
 // ============================================================
 
 // Константы для IBuffer рендеринга
-#define IBUF_W (SDL_SCREEN_WIDTH - 20)
+#define IBUF_W (SDL_SCREEN_WIDTH - 16)
 #define IBUF_H 164
 #define IBUF_X 8
 #define IBUF_Y SDL_SCREEN_HEIGHT - 22 - IBUF_H
@@ -82,7 +82,7 @@ void render_ibuffer(IBuffer& buffer, int x = IBUF_X, int y = IBUF_Y,
 #define DEBUGGER_X 8
 #define DEBUGGER_Y 8
 #define DEBUGGER_LINE_HEIGHT 8
-#define DEBUGGER_WIDTH 480
+#define DEBUGGER_WIDTH  (SDL_SCREEN_WIDTH - 16)
 #define DEBUGGER_HEIGHT 180
 #define DEBUGGER_MARGIN  8
 #define DEBUGGER_TEXT_COLOR 0xFFFFFF

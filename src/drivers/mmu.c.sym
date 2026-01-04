@@ -1,0 +1,9 @@
+_mmu_command                    = $0012 ; addr, public, , , code_compiler, src/drivers/mmu.c:290
+_mmu_detect                     = $0000 ; addr, public, , , code_compiler, src/drivers/mmu.c:269
+_mmu_get_ctx                    = $002F ; addr, public, , , code_compiler, src/drivers/mmu.c:313
+_mmu_get_info                   = $000B ; addr, public, , , code_compiler, src/drivers/mmu.c:283
+_mmu_install                    = $0007 ; addr, public, , , code_compiler, src/drivers/mmu.c:277
+_mmu_lock                       = $003D ; addr, public, , , code_compiler, src/drivers/mmu.c:329
+_mmu_map                        = $0033 ; addr, public, , , code_compiler, src/drivers/mmu.c:319
+_mmu_set_ctx                    = $002C ; addr, public, , , code_compiler, src/drivers/mmu.c:308
+_mmu_unlock                     = $0041 ; addr, public, , , code_compiler, src/drivers/mmu.c:335

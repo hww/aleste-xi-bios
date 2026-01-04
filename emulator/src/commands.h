@@ -5,7 +5,7 @@
 #include "cli.h"
 
 // Инициализация всех команд дебаггера
-void init_debugger_commands(Debugger* debugger, Z80EX_CONTEXT* cpu, uint8_t* memory);
+void init_debugger_commands(Debugger* debugger);
 
 // Отдельные команды для регистрации
 void register_debugger_commands(CLI& cli, Debugger& debugger, Z80EX_CONTEXT* cpu, uint8_t* memory);

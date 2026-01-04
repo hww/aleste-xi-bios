@@ -6,9 +6,6 @@ module vbuf
 
 include "../../inc/bios/undefined_method.inc"
 
-; ---- Секция: Полиморфная таблица (системный слот) ----
-section vbuf_vtable
-align 32
 
 ; Метка начала таблицы (для копирования из драйверов)
 PUBLIC __vbuf_vtable_start
@@ -46,6 +43,12 @@ PUBLIC __vbuf_draw_bitmap
 PUBLIC __vbuf_swap_buffers
 PUBLIC __vbuf_get_backbuf
 PUBLIC __vbuf_clear_backbuf
+
+; ---- Секция: Полиморфная таблица (системный слот) ----
+section DRV_VTABLE
+align 32
+
+
 __vbuf_vtable_start:
 
 ; Системные методы (0xFD60-0xFD7F)
@@ -90,14 +93,15 @@ PUBLIC __vbuf_vtable_end
 __vbuf_vtable_end:
 
 ; ---- Секция: Системные функции ----
-section vbuf_system
+section DRV_CODE
 
 ; Вход: HL = адрес VTable конкретного драйвера
 ; Выход: A = код ошибки, CF=1 при ошибке
 PUBLIC __vbuf_activate_driver
 __vbuf_activate_driver:
-    ld de, __vbuf_vtable_start
+
     ld (current_driver), hl      ; сохраняем адрес исходной VTable
+    ld de, __vbuf_vtable_start
     ld bc, __vbuf_vtable_end - __vbuf_vtable_start
     ldir                         ; копируем VTable в системный слот
     xor a                        ; успех
@@ -110,5 +114,5 @@ __vbuf_get_current_vtable:
     ld hl, (current_driver)
     ret
 
-section vbuf_data
+section DRV_DATA
 current_driver: dw 0x0000

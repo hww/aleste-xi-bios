@@ -1,0 +1,12 @@
+_vbuf_activate_driver           = $00C1 ; addr, public, , , code_compiler, src/drivers/vbuf.c:456
+_vbuf_clear                     = $0027 ; addr, public, , , code_compiler, src/drivers/vbuf.c:323
+_vbuf_clear_rect                = $002F ; addr, public, , , code_compiler, src/drivers/vbuf.c:331
+_vbuf_command                   = $000E ; addr, public, , , code_compiler, src/drivers/vbuf.c:305
+_vbuf_draw_char                 = $00A6 ; addr, public, , , code_compiler, src/drivers/vbuf.c:421
+_vbuf_get_current_vtable        = $00CF ; addr, public, , , code_compiler, src/drivers/vbuf.c:469
+_vbuf_get_mode_info             = $0007 ; addr, public, , , code_compiler, src/drivers/vbuf.c:298
+_vbuf_init                      = $0000 ; addr, public, , , code_compiler, src/drivers/vbuf.c:290
+_vbuf_put_pixel                 = $0088 ; addr, public, , , code_compiler, src/drivers/vbuf.c:398
+_vbuf_put_pixel_fast            = $006D ; addr, public, , , code_compiler, src/drivers/vbuf.c:375
+_vbuf_scroll_down               = $005A ; addr, public, , , code_compiler, src/drivers/vbuf.c:362
+_vbuf_scroll_up                 = $0047 ; addr, public, , , code_compiler, src/drivers/vbuf.c:349

@@ -20,7 +20,7 @@ AS = z80asm
 # Флаги компиляции
 # -startup=0: используем свой crt0
 # -m: генерировать map-файл (критично для отладки адресов)
-CFLAGS = +z80 -vn -O3 -startup=0 -m -Iinclude -I. \
+CFLAGS = +z80 -vn -O3 -startup=0 -m -Iinclude -I. -s \
          -clib=sdcc_iy \
          -pragma-define:CRT_INTERRUPT_MODE=1
          -zorg 0xC000 \
@@ -104,4 +104,4 @@ clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
 
 run: $(TARGET).bin
-	bin/z80_emu output/aleste.bin
+	bin/z80_emu output/aleste.bin build/aleste.sym

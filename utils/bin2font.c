@@ -31,9 +31,9 @@ int main(int argc, char *argv[]) {
     
     // Заголовок
     fprintf(output, "; %s - Сконвертированный шрифт\n", argv[2]);
-    fprintf(output, "SECTION data_user\n");
-    fprintf(output, "PUBLIC _font_data\n\n");
-    fprintf(output, "_font_data:\n");
+    fprintf(output, "SECTION FONT_DATA\n");
+    fprintf(output, "PUBLIC __font_data\n\n");
+    fprintf(output, "__font_data:\n");
     
     // Читаем и конвертируем
     unsigned char buffer[16];

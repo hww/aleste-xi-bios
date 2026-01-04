@@ -5,20 +5,6 @@
 
 #include "drivers/vbuf.h"
 
-extern void _vbuf_activate_driver;
-extern void _vbuf_get_current_vtable;
-
-extern void _vbuf_init;
-extern void _vbuf_get_mode_info;
-extern void _vbuf_command;
-extern void _vbuf_clear;
-extern void _vbuf_clear_rect;
-extern void _vbuf_scroll_up;
-extern void _vbuf_scroll_down;
-extern void _vbuf_put_pixel_fast;
-extern void _vbuf_put_pixel;
-extern void _vbuf_draw_char;
-
 
 /* Обязательные методы */
 bool vbuf_init(void) {
@@ -144,7 +130,8 @@ void vbuf_draw_char(const uint8_t* font, uint8_t char_code,
                    uint16_t x, uint16_t y) {
     font; char_code; x; y;
     __asm
-        ; На стеке: [SP+2] = font L, [SP+3] = font H
+        ; [SP+2] = font L, 
+        ; [SP+3] = font H
         ; [SP+4] = char_code, [SP+6] = x.l, [SP+7] = x.h
         ; [SP+8] = y.l, [SP+9] = y.h
         ld hl, #2

@@ -5,14 +5,10 @@
 #include "forward_decl.h"
 #include <z80ex.h>
 
-
 enum class ECycle { IOWR, IORD, MWR, MRD, OPCODE };
 enum class Mode { LEGACY, NATIVE };
 
-
 extern Debugger debugger;
-
-extern Z80EX_CONTEXT *cpu;
 
 // ============================================================
 // Debugger
@@ -25,6 +21,7 @@ class CLI;
 extern Minibuffer minibuffer;
 extern IBuffer ibuffer;
 extern CLI cli;
+extern Z88dkSymParser sym_parser;
 
 // ============================================================
 // Memory

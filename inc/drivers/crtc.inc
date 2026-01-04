@@ -29,3 +29,18 @@ extern __crtc_uninstall   ; +12 - выгрузка
 ; Специфичные методы CRTC
 extern __crtc_set_mode    ; +15 - установка видеорежима
 extern __crtc_set_view    ; +18 - установка адреса отображения
+
+
+
+extern __crtc_mode_tables:
+extern __mode_cpc_mode2       ; 0
+extern __mode_cpc_mode1       ; 1
+extern __mode_cpc_mode0       ; 2
+extern __mode_16k1b           ; 3
+extern __mode_16k2b           ; 4
+extern __mode_16k4b           ; 5
+extern __mode_32k2b           ; 6
+extern __mode_32k4b           ; 7
+extern __mode_32k8b           ; 8
+extern __mode_64k4b           ; 9
+extern __mode_64k8b           ; 10

@@ -14,6 +14,8 @@ enum class DebugMode;
 struct CPUState;
 struct Breakpoint;
 class Debugger;
-
+class Z88dkSymParser;
+class SymbolInfo;
+class SourceLocation;
 
 #endif // _FORWARD_DECL_

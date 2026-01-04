@@ -9,9 +9,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
+extern void _vbuf_activate_driver;
+extern void _vbuf_get_current_vtable;
+extern void _drv_16k1b_vtable;
+
+extern void _vbuf_init;
+extern void _vbuf_get_mode_info;
+extern void _vbuf_command;
+extern void _vbuf_clear;
+extern void _vbuf_clear_rect;
+extern void _vbuf_scroll_up;
+extern void _vbuf_scroll_down;
+extern void _vbuf_put_pixel_fast;
+extern void _vbuf_put_pixel;
+extern void _vbuf_draw_char;
+
+extern void _scr_font_data;
+
+//#ifdef __cplusplus
+//extern "C" {
+//#endif
 
 /* Структуры */
 typedef struct {
@@ -36,7 +54,7 @@ const vbuf_mode_info_t* vbuf_get_mode_info(void);
 bool vbuf_command(uint8_t cmd, void* param);
 
 /* Управление буфером */
-void vbuf_clear(uint8_t color);
+void vbuf_clear(uint8_t color) __naked;
 void vbuf_clear_rect(const vbuf_rect_t* rect, uint8_t color);
 void vbuf_scroll_up(uint8_t pixels);
 void vbuf_scroll_down(uint8_t pixels);
@@ -61,9 +79,9 @@ void vbuf_fill_rect(uint16_t x, uint16_t y,
                     uint16_t width, uint16_t height, uint8_t color);
 
 /* Текст и битмапы */
-void vbuf_draw_char_at_addr(const uint8_t* font_char, void* vram_addr);
+void vbuf_draw_char_at_addr(const uint8_t* font_char, void* vram_addr) __naked;
 void vbuf_draw_char(const uint8_t* font, uint8_t char_code,
-                    uint16_t x, uint16_t y);
+                    uint16_t x, uint16_t y) __naked;
 void vbuf_draw_bitmap(const uint8_t* bitmap, uint16_t x, uint16_t y,
                       uint16_t width, uint16_t height);
 
@@ -73,7 +91,7 @@ void* vbuf_get_backbuf(void);
 void vbuf_clear_backbuf(uint8_t color);
 
 /* Системные функции */
-bool vbuf_activate_driver(void* driver_vtable);
+bool vbuf_activate_driver(void* driver_vtable) __naked;
 void* vbuf_get_current_vtable(void);
 
 /* Константы */
@@ -86,8 +104,11 @@ void* vbuf_get_current_vtable(void);
 #define VBUF_FLAG_DOUBLEBUF      (1 << 1)
 #define VBUF_FLAG_LINEAR         (1 << 2)
 
-#ifdef __cplusplus
-}
-#endif
+
+
+
+//#ifdef __cplusplus
+//}
+//#endif
 
 #endif /* VBUF_H */

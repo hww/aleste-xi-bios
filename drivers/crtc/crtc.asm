@@ -262,7 +262,7 @@ get_mode_table:
     ld l, a
     ld h, 0
     add hl, hl          ; index * 2
-    ld de, crtc_mode_tables
+    ld de, __crtc_mode_tables
     add hl, de
     ld e, (hl)
     inc hl

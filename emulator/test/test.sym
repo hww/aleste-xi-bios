@@ -1,0 +1,7 @@
+delay                           = $002A ; addr, local, , , , test/test.asm:47
+fill_loop                       = $0018 ; addr, local, , , , test/test.asm:20
+inner_delay                     = $002F ; addr, local, , , , test/test.asm:52
+main_loop                       = $0012 ; addr, local, , , , test/test.asm:15
+not_done                        = $0027 ; addr, local, , , , test/test.asm:43
+outer_delay                     = $002D ; addr, local, , , , test/test.asm:50
+start                           = $0000 ; addr, local, , , , test/test.asm:3

@@ -1,0 +1,4 @@
+_mmu_alloc                      = $0004 ; addr, public, , , code_compiler, src/drivers/mmu_mem.c:264
+_mmu_free                       = $000A ; addr, public, , , code_compiler, src/drivers/mmu_mem.c:272
+_mmu_get_free_pages             = $001F ; addr, public, , , code_compiler, src/drivers/mmu_mem.c:287
+_mmu_mem_init                   = $0000 ; addr, public, , , code_compiler, src/drivers/mmu_mem.c:258
