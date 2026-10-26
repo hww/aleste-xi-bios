@@ -8,6 +8,8 @@ Aleste LX breaks this deadlock by providing a **virtual hardware platform, BIOS,
 
 Aleste LX is a successor to the original *Aleste EX* architecture. It retains what worked while addressing several of the original design's shortcomings: a cleaner memory map, a proper driver dispatch mechanism, well-defined error handling, and a stable ABI for applications.
 
+![Debugger](./doc/emul_screen.png)
+
 ---
 
 ## Why This Project Might Be Useful to You
@@ -91,6 +93,18 @@ aleste-xi-bios/
 ├── output/aleste.bin    Assembled 64 KB BIOS image
 └── main.c               Example application
 ```
+
+## Documentation
+
+The Aleste LX documentation repository contains architectural documentation, BIOS design notes, and supporting technical specifications.
+
+**Start here:**
+
+- **[Aleste LX Documentation](https://github.com/hww/aleste-xi-doc)** — the main documentation repository.
+- [Aleste LX Platform Documentation](https://github.com/hww/aleste-xi-doc/blob/main/aleste-lx/aleste-xi.pdf) — platform architecture and design.
+- [BIOS Architecture](https://github.com/hww/aleste-xi-doc/blob/main/bios/aleste-bios.pdf) — BIOS architecture and the driver interface.
+
+The documentation complements the source code by explaining the architectural concepts behind the platform, including the BIOS, driver model, and hardware abstractions.
 
 ---
 
