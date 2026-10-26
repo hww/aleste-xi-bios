@@ -1,5 +1,5 @@
 # Проект: Aleste BIOS
-Z88DK_PATH = /home/valery/bin/z88dk
+Z88DK_PATH = /home/valery/z88dk
 # Добавляем их в PATH самого процесса Make
 export PATH := $(Z88DK_PATH)/bin:$(OSS_CAD_PATH)/bin:$(PATH)
 # Для z88dk обязательна эта переменная

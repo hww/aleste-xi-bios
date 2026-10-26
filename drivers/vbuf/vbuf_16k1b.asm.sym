@@ -1,5 +1,5 @@
 BYTES_PER_LINE                  = $0050 ; const, local, , , , drivers/vbuf/vbuf_16k1b.asm:15
-ERR_NOT_SUPPORTED               = $0001 ; const, local, , , , /home/valery/projects/h2w/aleste-xi-bios/drivers/vbuf/../../inc/bios/errors.inc:19
+ERR_NOT_SUPPORTED               = $0001 ; const, local, , , , /mnt/d/projects/hww/_z80/aleste-xi-bios/drivers/vbuf/../../inc/bios/errors.inc:19
 MMU_SLOT2_CTL                   = $007F ; const, local, , , , drivers/vbuf/vbuf_16k1b.asm:11
 SCREEN_HEIGHT                   = $00C8 ; const, local, , , , drivers/vbuf/vbuf_16k1b.asm:14
 SCREEN_WIDTH                    = $0280 ; const, local, , , , drivers/vbuf/vbuf_16k1b.asm:13
