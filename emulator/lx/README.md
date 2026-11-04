@@ -17,8 +17,11 @@ The PC keyboard feeds both the PS/2 event queue the BIOS reads and the
 matrix table is generated from the core's `kbd_520ex.sv` by
 `tools/gen_kbdmatrix.py`, so both always agree.
 
+The first game controller (or joystick) is row 9 of the matrix, like the
+core's joystick: D-pad or left stick, A/Cross fire 1, B/Circle fire 2.
+
 Not yet: the 520EX/CPC legacy mode (the emulator stops when software switches
-to it), joysticks, IPC and the graphics accelerator.
+to it), IPC and the graphics accelerator.
 
 ## Build
 
