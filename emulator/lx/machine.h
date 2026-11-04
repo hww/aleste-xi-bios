@@ -27,6 +27,8 @@ constexpr uint32_t ROM2_BASE  = 0x400000;   // lo que va detras (AL512.BIN)
 constexpr int      AUDIO_RATE = 48000;
 constexpr int      SCREEN_W   = 640;
 constexpr int      SCREEN_H   = 400;        // 200 lineas dobladas
+constexpr int      LEG_W      = 768;        // modo legacy: 48 us a 16 MHz
+constexpr int      LEG_H      = 272;        // lineas 30-302 tras el VSYNC
 
 struct PS2Event { uint8_t code; bool pressed; bool extended; };
 
@@ -50,8 +52,11 @@ public:
     std::function<bool(uint16_t pc)> break_check;
     bool break_hit = false;
 
-    // Pantalla: SCREEN_W x SCREEN_H en ARGB8888
-    const uint32_t* framebuffer() const { return fb.data(); }
+    // Pantalla en ARGB8888: SCREEN_W x SCREEN_H en modo nativo; en modo
+    // legacy (520EX/CPC), la ventana visible del monitor (LEG_W x LEG_H)
+    const uint32_t* framebuffer() const { return legacy() ? leg_fb.data() : fb.data(); }
+    int  fb_width() const  { return legacy() ? LEG_W : SCREEN_W; }
+    int  fb_height() const { return legacy() ? LEG_H : SCREEN_H; }
     void render();
 
     // Audio: muestras estereo de 16 bits producidas desde la ultima llamada
@@ -67,12 +72,14 @@ public:
     Z80EX_CONTEXT* cpu = nullptr;
     std::vector<uint8_t> mem;
     uint64_t cycles = 0;
-    double   cpu_hz() const { return 54e6 / (mmu_clock + 1); }
+    double   cpu_hz() const { return legacy() ? 4e6 : 54e6 / (mmu_clock + 1); }
     bool     legacy() const { return !(mmu_control & 0x02); }
     std::string stop_reason;
+    void     dump_legacy() const;                       // estado del modo legacy (pruebas)
+    uint64_t leg_frames = 0, leg_irqs = 0;
 
     uint32_t translate(uint16_t addr) const;            // direccion de la CPU -> fisica
-    uint8_t  peek(uint16_t addr) const { uint32_t p = translate(addr); return p < 0xFF0000 ? mem[p] : 0xFF; }
+    uint8_t  peek(uint16_t addr) const { uint32_t p = legacy() ? leg_translate(addr, false) : translate(addr); return p < 0xFF0000 ? mem[p] : 0xFF; }
     // estado de la MMU para el depurador
     bool     is_supervisor() const { return supervisor; }
     uint8_t  mmu_ctrl() const { return mmu_control; }
@@ -157,13 +164,50 @@ private:
     bool     kq_ovf = false;
     uint8_t  kin_ctrl = 0;
     uint8_t  kmatrix[11] = {};                          // filas del 520EX/CPC, 1 = pulsada
+    bool     kfshift = false;                           // F6-F10: SHIFT (fila 2) en la lectura del CPC
 public:
     uint8_t  joy = 0;                                   // fila 9 (joystick), 1 = pulsado
     const uint8_t* matrix() const { return kmatrix; }
 private:
 public:
     bool     layout_es = false;                         // opcion del OSD
+    bool     boot_shift = false;                        // SHIFT al entrar en el 520EX: modo AMSTRAD
+    uint64_t leg_since = 0;                             // ciclos desde la entrada en modo legacy
+    bool     leg_key = false;                           // se ha pulsado una tecla desde entonces
+    bool     was_legacy = false;
 private:
+
+    // ---- Modo legacy (520EX/CPC): legacy.cpp, segun mmu_legacy.sv,
+    //      cpc_video.sv y la E/S legacy de aleste_lx_core.sv
+    uint8_t  leg_rmr = 0x80, leg_mmr = 0xC0, leg_upper = 0, leg_map[4] = {0, 1, 2, 3};
+    uint8_t  extport = 0;                               // FABF: D1 alta res., D2 MAPMOD, D3 pantalla
+    uint32_t leg_translate(uint16_t a, bool write) const;
+    uint8_t  leg_pread(uint16_t port);
+    void     leg_pwrite(uint16_t port, uint8_t v);
+    void     leg_time(int tstates);                     // avanza el CRTC y el video
+    void     leg_reset();
+    // CRTC (UM6845, tipo 0)
+    uint8_t  crt_idx = 0, crt[18] = {};
+    int      crt_hc = 0, crt_vlc = 0, crt_vc = 0, crt_adj = 0, crt_hsc = 0, crt_vsc = 0;
+    bool     crt_in_adj = false, crt_hs = false, crt_vs = false;
+    uint16_t crt_ma = 0, crt_ma_row = 0;
+    double   char_acc = 0;
+    void     crtc_char();
+    // Gate Array
+    uint8_t  ga_pen = 0, ga_ink[16] = {}, ga_border = 0x14, ga_mode = 1;
+    int      ga_hcnt = 0, ga_vcnt = 7;
+    bool     ga_hs = false, ga_vs = false, prev_crt_hs = false, prev_crt_vs = false, vs_seen = false;
+    int      irq_cnt = 0, vs_wait = 0;
+    bool     ga_irq = false;
+    // PPI 8255 y AY (registros; el sonido, en la fase 2)
+    uint8_t  ppi_a = 0, ppi_c = 0, ppi_ctrl = 0x9B, ay_addr = 0, ay_reg[16] = {};
+    void     ppi_c_changed();
+    // Monitor: imagen en bruto y ventana visible
+    std::vector<uint32_t> leg_raw, leg_fb;
+    int      beam_x = 0, beam_y = 0;
+    double   beam_t = 0;                                // ns desde el HSYNC de salida
+    void     leg_frame_done();
+    uint32_t leg_color(uint8_t c7) const;
 
     // ---- Video
     std::vector<uint32_t> fb;

@@ -7,6 +7,8 @@
 //     --keyboard us|es teclado de EE. UU. (por defecto) o espanol, como la
 //                      opcion Keyboard del OSD (--es = --keyboard es)
 //     --scale N        ventana de 320N x 240N (3 por defecto)
+//     --boot amstrad   al pasar al 520EX (orden 520EX), SHIFT pulsado 2,5 s:
+//                      el SETUP arranca en modo AMSTRAD (BASIC del CPC)
 //   Depurador (consola en la terminal, ver debugger.h):
 //     --debug          arranca parado y con la consola
 //     --sym fichero    simbolos de un mapa de z88dk (se puede repetir)
@@ -125,9 +127,10 @@ struct TypeJob { double ms; std::string text; size_t pos = 0; int phase = 0; dou
 static void save_ppm(const Machine& m, const std::string& path) {
     FILE* f = fopen(path.c_str(), "wb");
     if (!f) return;
-    fprintf(f, "P6\n%d %d\n255\n", lx::SCREEN_W, lx::SCREEN_H);
+    int w = m.fb_width(), h = m.fb_height();
+    fprintf(f, "P6\n%d %d\n255\n", w, h);
     const uint32_t* p = m.framebuffer();
-    for (int i = 0; i < lx::SCREEN_W * lx::SCREEN_H; i++) {
+    for (int i = 0; i < w * h; i++) {
         uint8_t rgb[3] = {(uint8_t)(p[i] >> 16), (uint8_t)(p[i] >> 8), (uint8_t)p[i]};
         fwrite(rgb, 1, 3, f);
     }
@@ -136,7 +139,7 @@ static void save_ppm(const Machine& m, const std::string& path) {
 
 int main(int argc, char** argv) {
     std::string rom, dska, dskb, shot, pcm, save_a;
-    bool headless = false, es = false, debug = false;
+    bool headless = false, es = false, debug = false, boot_amstrad = false;
     std::vector<std::string> syms, breaks;
     double run_ms = 0;
     int scale = 3;
@@ -149,6 +152,7 @@ int main(int argc, char** argv) {
         else if (a == "--es") es = true;
         else if (a == "--keyboard") { std::string k = next(); es = (k == "es" || k == "ES"); }
         else if (a == "--debug") debug = true;
+        else if (a == "--boot") { std::string b = next(); boot_amstrad = (b == "amstrad"); }
         else if (a == "--sym") syms.push_back(next());
         else if (a == "--break") breaks.push_back(next());
         else if (a == "--scale") scale = std::max(1, atoi(next().c_str()));
@@ -176,6 +180,7 @@ int main(int argc, char** argv) {
     if (!dska.empty() && !m.fdc.mount(0, dska)) fprintf(stderr, "Cannot mount %s\n", dska.c_str());
     if (!dskb.empty() && !m.fdc.mount(1, dskb)) fprintf(stderr, "Cannot mount %s\n", dskb.c_str());
     m.layout_es = es;
+    m.boot_shift = boot_amstrad;
     m.reset();
     lx::Debugger dbg(m);
     for (auto& f : syms) dbg.load_symbols(f);
@@ -191,7 +196,7 @@ int main(int argc, char** argv) {
             if (!ascii_to_ps2(j.text[j.pos], code, sh)) { j.pos++; continue; }
             if (j.phase == 0) { if (sh) m.key_event(0x12, true, false); m.key_event(code, true, false); j.phase = 1; }
             else { m.key_event(code, false, false); if (sh) m.key_event(0x12, false, false); j.phase = 0; j.pos++; }
-            j.next = now_ms + 6;
+            j.next = now_ms + (m.legacy() ? 40 : 6);    // el CPC explora la matriz cada 20 ms
         }
     };
 
@@ -209,6 +214,7 @@ int main(int argc, char** argv) {
         if (!save_a.empty()) m.fdc.save(0, save_a);
         if (pcmf) fclose(pcmf);
         printf("cycles %llu, %.3f s\n", (unsigned long long)m.cycles, m.cycles / m.cpu_hz());
+        if (m.legacy()) m.dump_legacy();
         return 0;
     }
 
@@ -216,9 +222,17 @@ int main(int argc, char** argv) {
     SDL_Window* win = SDL_CreateWindow("Aleste LX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                        320 * scale, 240 * scale, SDL_WINDOW_RESIZABLE);
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_RenderSetLogicalSize(ren, lx::SCREEN_W, lx::SCREEN_H * 6 / 5);   // 4:3
-    SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
-                                         lx::SCREEN_W, lx::SCREEN_H);
+    // la imagen siempre a 4:3; su tamano cambia con el modo (LX o 520EX/CPC)
+    SDL_Texture* tex = nullptr;
+    int tex_w = 0, tex_h = 0;
+    auto fit_texture = [&]() {
+        if (tex && tex_w == m.fb_width() && tex_h == m.fb_height()) return;
+        if (tex) SDL_DestroyTexture(tex);
+        tex_w = m.fb_width(); tex_h = m.fb_height();
+        tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, tex_w, tex_h);
+        SDL_RenderSetLogicalSize(ren, tex_w, tex_w * 3 / 4);
+    };
+    fit_texture();
     SDL_AudioSpec want = {}, have = {};
     want.freq = lx::AUDIO_RATE; want.format = AUDIO_S16SYS; want.channels = 2; want.samples = 1024;
     SDL_AudioDeviceID audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
@@ -299,7 +313,8 @@ int main(int argc, char** argv) {
             a.clear();
         } else m.audio().clear();
         m.render();
-        SDL_UpdateTexture(tex, nullptr, m.framebuffer(), lx::SCREEN_W * 4);
+        fit_texture();
+        SDL_UpdateTexture(tex, nullptr, m.framebuffer(), tex_w * 4);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
         SDL_RenderPresent(ren);

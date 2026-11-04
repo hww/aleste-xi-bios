@@ -24,6 +24,9 @@ public:
     uint8_t read_data();
     void    write_data(uint8_t v);
     void    motor(bool on) { motor_on = on; }
+    // INT del 765: fin de busqueda pendiente (hasta SENSE INTERRUPT), y en
+    // ejecucion sin DMA y en la fase de resultado (el 520EX la lee en PB1)
+    bool    irq() const { return int_pending || phase != CMD; }
 
 private:
     struct Drive {

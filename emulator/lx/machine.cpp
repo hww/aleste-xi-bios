@@ -73,6 +73,8 @@ void Machine::reset() {
     kq.clear(); kq_ovf = false; kin_ctrl = 0;
     memset(kmatrix, 0, sizeof(kmatrix));
     fdc.reset();
+    leg_reset();
+    leg_since = 0; leg_key = false;
     stop_reason.clear();
     z80ex_reset(cpu);
 }
@@ -90,6 +92,7 @@ uint32_t Machine::translate(uint16_t addr) const {
 }
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
+    if (legacy()) return mem[leg_translate(addr, false)];
     if (m1) {
         if (exit_pending) { supervisor = false; exit_pending = false; }
         if (!supervisor && (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066)) supervisor = true;
@@ -100,6 +103,7 @@ uint8_t Machine::mread(uint16_t addr, int m1) {
 }
 
 void Machine::mwrite(uint16_t addr, uint8_t v) {
+    if (legacy()) { mem[leg_translate(addr, true)] = v; return; }
     uint32_t p = translate(addr);
     if (p < 0xFF0000) mem[p] = v;
 }
@@ -136,6 +140,7 @@ void Machine::mmu_write(uint8_t r, uint8_t v) {
 }
 
 uint8_t Machine::pread(uint16_t port) {
+    if (legacy()) return leg_pread(port);
     uint8_t p = port & 0xFF;
     if (!supervisor && (mmu_control & 0x10)) return 0xFF;
     if (p < 0x80) return mmio_read(0xFF0000 + mmu_page * 128 + p);
@@ -144,6 +149,7 @@ uint8_t Machine::pread(uint16_t port) {
 }
 
 void Machine::pwrite(uint16_t port, uint8_t v) {
+    if (legacy()) { leg_pwrite(port, v); return; }
     uint8_t p = port & 0xFF;
     if (p == 0xF2) { supervisor = true; return; }
     if (!supervisor && (mmu_control & 0x10)) return;
@@ -369,7 +375,9 @@ void Machine::key_event(uint8_t code, bool pressed, bool extended) {
     for (auto& k : kbd_matrix_keys)
         if (k.code == code && k.ext == (extended ? 1 : 0)) {
             if (pressed) kmatrix[k.row] |= 1 << k.bit; else kmatrix[k.row] &= ~(1 << k.bit);
+            if (k.fshift) kfshift = pressed;
         }
+    if (pressed) leg_key = true;
     if (kq.size() >= 16) { kq_ovf = true; return; }
     kq.push_back({code, pressed, extended});
 }
@@ -502,6 +510,7 @@ uint32_t Machine::rgb12(uint16_t c) const {
 // 10 4), R19 = byte alto de la direccion, R12/R13 = inicio (en palabras),
 // R1 = bytes por linea / 2, R6 * (R9 + 1) = lineas
 void Machine::render() {
+    if (legacy()) return;                                       // legacy: leg_fb, al acabar cada cuadro
     uint32_t bc = rgb12(border);
     std::fill(fb.begin(), fb.end(), bc);
     int bpp_sel = crtc[0x12] & 3;
@@ -532,11 +541,23 @@ void Machine::render() {
 // ---------------------------------------------------------------- bucle
 int Machine::step() {
     double hz = cpu_hz();
-    pic_update();
-    int t;
-    if ((pic_pending & pic_mask) && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
-    else t = z80ex_step(cpu);
-    if (t <= 0) t = 4;
+    int t = 0;
+    if (legacy() && !was_legacy) { leg_since = 0; leg_key = false; }   // entrada en el 520EX
+    was_legacy = legacy();
+    if (legacy()) {
+        // la INT es la del Gate Array; al reconocerla se borra y se quita el
+        // bit 5 del contador (como el 40010)
+        if (ga_irq && z80ex_int_possible(cpu) && (t = z80ex_int(cpu)) > 0) { ga_irq = false; irq_cnt &= 0x1F; leg_irqs++; }
+        else t = z80ex_step(cpu);
+        if (t <= 0) t = 4;
+        leg_time(t);
+        leg_since += t;
+    } else {
+        pic_update();
+        if ((pic_pending & pic_mask) && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
+        else t = z80ex_step(cpu);
+        if (t <= 0) t = 4;
+    }
     cycles += t;
     frame_acc += t;
     us_acc += t;
@@ -552,10 +573,6 @@ bool Machine::run_frame() {
     if (!stop_reason.empty()) return false;
     double frame_cycles = cpu_hz() / 60.0;
     while (frame_acc < frame_cycles) {
-        if (legacy()) {
-            stop_reason = "legacy (520EX/CPC) mode is not emulated yet";
-            return false;
-        }
         // z80ex trata los prefijos como pasos sueltos: el depurador solo mira
         // el principio de cada instruccion
         if (break_check && !z80ex_last_op_type(cpu) && break_check(z80ex_get_reg(cpu, regPC))) {

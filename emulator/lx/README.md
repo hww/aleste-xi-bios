@@ -20,8 +20,30 @@ matrix table is generated from the core's `kbd_520ex.sv` by
 The first game controller (or joystick) is row 9 of the matrix, like the
 core's joystick: D-pad or left stick, A/Cross fire 1, B/Circle fire 2.
 
-Not yet: the 520EX/CPC legacy mode (the emulator stops when software switches
-to it), IPC and the graphics accelerator.
+### 520EX / CPC (legacy) mode
+
+When software switches the MMU to legacy mode (the `520EX` command of the ROM
+monitor, with AL512.BIN behind LX.ROM in `boot.rom`), the emulator becomes an
+Aleste 520EX, following the core's RTL: legacy MMU (CPC RAM configurations,
+lower/upper ROM, the PROM D62 upper ROM mapping and the MSX mapper with
+MAPMOD), UM6845 CRTC (type 0) emulated character by character, Gate Array
+(inks, modes changing at the output HSYNC, GA40010 output syncs and the
+300 Hz interrupt with its 52-line counter), CPC modes 0-3 and the 520EX high
+resolution modes, PROM D62 colours or MAPMOD direct RGB, PPI 8255, AY
+registers with the keyboard matrix on its port A, the FABF extension port,
+the idle 8251 and the floppy controller at FB7E/FB7F (DISKINT on PB1). The
+CPU runs at 4 MHz. The picture is the monitor's visible window (768 x 272,
+48 us x 272 lines after the syncs), as in the core.
+
+`--boot amstrad` holds SHIFT for 2.5 s after the switch (until a key is
+pressed), like the core's boot option: the 520EX SETUP then starts in
+AMSTRAD mode (CPC BASIC 1.1).
+
+Phase 1 done: 520EX boot screen and CPC BASIC with the keyboard. Still to
+come: AY sound and disk boot (AlesteDOS / MSX-DOS), then MagicSound, RTC,
+mouse and tape.
+
+Not yet in native mode: IPC and the graphics accelerator.
 
 ## Build
 
@@ -89,3 +111,5 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
+| `520ex` from the ROM monitor | 520EX boot screen (high resolution, 16 colours, MAPMOD) |
+| `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program |
