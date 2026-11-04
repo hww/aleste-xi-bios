@@ -578,10 +578,12 @@ int Machine::step() {
     if (legacy()) {
         // la INT es la del Gate Array; al reconocerla se borra y se quita el
         // bit 5 del contador (como el 40010)
-        if (ga_irq && z80ex_int_possible(cpu) && (t = z80ex_int(cpu)) > 0) { ga_irq = false; irq_cnt &= 0x1F; leg_irqs++; }
+        if (ms.nmi && !z80ex_last_op_type(cpu) && z80ex_nmi_possible(cpu)) { ms.nmi = false; t = z80ex_nmi(cpu); }
+        else if (ga_irq && z80ex_int_possible(cpu) && (t = z80ex_int(cpu)) > 0) { ga_irq = false; irq_cnt &= 0x1F; leg_irqs++; }
         else t = z80ex_step(cpu);
         if (t <= 0) t = 4;
         leg_time(t);
+        ms_time(t);
         leg_since += t;
     } else {
         pic_update();

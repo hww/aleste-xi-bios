@@ -33,6 +33,98 @@ void Machine::leg_reset() {
     leg_raw.assign(1024 * 320, 0xFF000000);
     leg_fb.assign(LEG_W * LEG_H, 0xFF000000);
     beam_x = beam_y = 0; beam_t = 0;
+    ms = MagicSound();
+}
+
+// ---------------------------------------------------------------- MagicSound
+// Puertos (A15..A10 = 111110, A7..A4 = D): F8Dx 8237, F9D8-F9DB 8254 n.1
+// (contadores 0-2 = canales A-C), F9D4-F9D7 8254 n.2 (contador 0 = canal D),
+// FAD0-FAD3 volumen, FBDx mapper de la DMA (A3..A2 canal, A1..A0 cuarto de
+// 64 KB; la pagina va invertida)
+static bool ms_port(uint16_t p) { return (p >> 10) == 0x3E && ((p >> 4) & 15) == 0xD; }
+
+uint8_t Machine::ms_read(uint16_t p) {
+    int blk = (p >> 8) & 3, r = p & 15;
+    if (blk != 0) return 0xFF;
+    if (r < 8) {
+        int c = (r >> 1) & 3;
+        uint16_t v = (r & 1) ? ms.cur_cnt[c] : ms.cur_adr[c];
+        uint8_t b = ms.ff ? v >> 8 : v & 0xFF;
+        ms.ff = !ms.ff;
+        return b;
+    }
+    if (r == 8) { uint8_t v = ms.tc_stat & 15; ms.tc_stat = 0; return v; }
+    return 0xFF;
+}
+
+void Machine::ms_write(uint16_t p, uint8_t v) {
+    int blk = (p >> 8) & 3, r = p & 15;
+    switch (blk) {
+    case 0:                                                     // 8237
+        if (r < 8) {
+            int c = (r >> 1) & 3;
+            uint16_t* base = (r & 1) ? ms.base_cnt : ms.base_adr;
+            uint16_t* cur  = (r & 1) ? ms.cur_cnt : ms.cur_adr;
+            if (!ms.ff) { base[c] = (base[c] & 0xFF00) | v; cur[c] = (cur[c] & 0xFF00) | v; }
+            else        { base[c] = (base[c] & 0x00FF) | (v << 8); cur[c] = (cur[c] & 0x00FF) | (v << 8); }
+            ms.ff = !ms.ff;
+        } else switch (r) {
+            case 0xA: if (v & 4) ms.dmask |= 1 << (v & 3); else ms.dmask &= ~(1 << (v & 3)); break;
+            case 0xB: ms.dmode[v & 3] = v; break;
+            case 0xC: ms.ff = false; break;
+            case 0xD: ms.dmask = 0x0F; ms.ff = false; ms.tc_stat = 0; break;
+            case 0xE: ms.dmask = 0; break;
+            case 0xF: ms.dmask = v & 15; break;
+        }
+        break;
+    case 1: {                                                   // 8254
+        int tidx = (p & 8) ? (p & 3) : 3 + (p & 3);
+        if ((p & 3) == 3) {
+            int i = ((p & 8) ? 0 : 3) + (v >> 6);
+            if ((v & 0x30) && i < 6) { ms.rwmode[i] = (v >> 4) & 3; ms.lsb_next[i] = true; }
+        } else if (tidx < 6) {
+            switch (ms.rwmode[tidx]) {
+            case 1: ms.reload[tidx] = v; ms.tcount[tidx] = v ? v : 65536; break;
+            case 2: ms.reload[tidx] = v << 8; ms.tcount[tidx] = (v << 8) ? (v << 8) : 65536; break;
+            default:
+                if (ms.lsb_next[tidx]) ms.reload[tidx] = (ms.reload[tidx] & 0xFF00) | v;
+                else { ms.reload[tidx] = (ms.reload[tidx] & 0x00FF) | (v << 8); ms.tcount[tidx] = ms.reload[tidx] ? ms.reload[tidx] : 65536; }
+                ms.lsb_next[tidx] = !ms.lsb_next[tidx];
+            }
+        }
+        break;
+    }
+    case 2: ms.vol[p & 3] = v; break;                           // volumen (byte entero)
+    case 3: ms.page[(p >> 2) & 3][p & 3] = ~v & 0x3F; break;    // mapper de la DMA (invertido)
+    }
+}
+
+// Un byte de la RAM al DAC del canal; al acabar el bloque, NMI
+void Machine::ms_dma(int c) {
+    if (ms.dmask & (1 << c)) return;
+    uint16_t a = ms.cur_adr[c];
+    uint32_t phys = ((uint32_t)ms.page[c][a >> 14] << 14) | (a & 0x3FFF);
+    ms.dac[c] = mem[phys];
+    ms.cur_adr[c] = (ms.dmode[c] & 0x20) ? a - 1 : a + 1;
+    if (ms.cur_cnt[c] == 0) {                                   // fin de bloque (TC)
+        ms.tc_stat |= 1 << c;
+        ms.nmi = true;
+        if (ms.dmode[c] & 0x10) { ms.cur_adr[c] = ms.base_adr[c]; ms.cur_cnt[c] = ms.base_cnt[c]; }  // autoinicio
+        else { ms.cur_cnt[c] = 0xFFFF; ms.dmask |= 1 << c; }
+    } else ms.cur_cnt[c]--;
+}
+
+// Los contadores (modo de pulsos, 4 MHz = el reloj de la CPU): cada uno de los
+// canales A-D pide un byte al vencer
+void Machine::ms_time(int t) {
+    for (int i = 0; i < 4; i++) {
+        if (!ms.reload[i] && !ms.tcount[i]) continue;
+        ms.tcount[i] -= t;
+        while (ms.tcount[i] <= 0) {
+            ms.tcount[i] += ms.reload[i] ? ms.reload[i] : 65536;
+            ms_dma(i);
+        }
+    }
 }
 
 // ---------------------------------------------------------------- MMU legacy
@@ -97,6 +189,7 @@ uint8_t Machine::leg_pread(uint16_t port) {
         default: v &= 0xFF;
         }
     }
+    if (ms_port(port)) v &= ms_read(port);
     // 8251 en reposo (EExx datos, EFxx estado 85h: lo lee la BIOS de MSX-DOS)
     if ((port >> 9) == 0x77) v &= (port & 0x100) ? 0x85 : 0x00;
     // disquetera: FB7E estado, FB7F datos
@@ -165,6 +258,7 @@ void Machine::leg_pwrite(uint16_t port, uint8_t v) {
         default: break;
         }
     }
+    if (ms_port(port)) ms_write(port, v);
     // FABx (A7 = 1, A5 = 1): EXTEND PORT del 520EX
     if ((port >> 8) == 0xFA && (port & 0x80) && (port & 0x20)) extport = v;
     // disquetera: FB7F datos, FA7E motor
@@ -299,14 +393,14 @@ void Machine::crtc_char() {
             if (crt_vc == (crt[4] & 127)) {
                 if (crt[5] & 31) { crt_in_adj = true; crt_adj = 0; }
                 else { crt_vc = 0; crt_ma_row = ((crt[12] & 0x3F) << 8) | crt[13]; }
-            } else crt_vc++;
-        } else crt_vlc++;
+            } else crt_vc = (crt_vc + 1) & 0x7F;
+        } else crt_vlc = (crt_vlc + 1) & 0x1F;
         if (!crt_in_adj && crt_vlc == 0 && crt_vc == (crt[7] & 127) && !crt_vs) {
             crt_vs = true;
             crt_vsc = (crt[3] >> 4) ? (crt[3] >> 4) : 16;
         }
         crt_ma = crt_ma_row;
-    } else crt_hc++;
+    } else crt_hc = (crt_hc + 1) & 0xFF;                      // 8 bits: si R0 baja, da la vuelta
 }
 
 void Machine::leg_time(int t) {
@@ -382,6 +476,11 @@ void Machine::ay_sample(int& l, int& r) {
     // estereo ABC como el core: A x 2 + B a la izquierda, C x 2 + B a la derecha
     l = (out[0] * 2 + out[1]) << 4;
     r = (out[2] * 2 + out[1]) << 4;
+    // MagicSound: (muestra - 80h) x volumen; A y D a la izquierda, B y C a la
+    // derecha (como el Amiga); a la mezcla, a la mitad (como el core)
+    auto chn = [&](int c) { return ((int)ms.dac[c] - 128) * (int)ms.vol[c]; };
+    l += ((chn(0) + chn(3)) >> 2) >> 1;
+    r += ((chn(1) + chn(2)) >> 2) >> 1;
 }
 
 } // namespace lx

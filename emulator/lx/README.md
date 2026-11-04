@@ -44,9 +44,15 @@ core) and the MC146818 clock shared with the AY on the PPI port A (FABF D5,
 PC2..PC0 commands, UF update flag, years since 1980), which the 520EX needs
 to find its floppy drives.
 
-Done: 520EX boot screen, CPC BASIC with keyboard and sound, and MSX-DOS 1.04
+And the 520EX MagicSound (Patisonic's board, as in the core's
+`magic_sound.sv`): 8237 DMA, two 8254s at 4 MHz, a DAC and a volume byte per
+channel, the inverted DMA page mapper and the end-of-block NMI the MAG player
+uses; channels A and D on the left, B and C on the right.
+
+Done: 520EX boot screen, CPC BASIC with keyboard and sound, MSX-DOS 1.04
 booting from `alestedos-dev.dsk` (FOTON-127 BIOS, COMMAND 2.2A, DIR, disk
-change). Still to come: MagicSound (MAG and its STM songs), mouse and tape.
+change) and MAG.COM playing the STM songs of `mag-player.dsk`. Still to
+come: mouse and tape.
 
 Not yet in native mode: IPC and the graphics accelerator.
 
@@ -138,3 +144,4 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program; `sound 1,284,100` gives 220.0 Hz on the left channel |
 | `520ex` with `alestedos-dev.dsk` in A | MSX-DOS 1.04 boots (FOTON-127 BIOS, COMMAND 2.2A, today's date), `dir` lists the 25 files |
 | disk change while MSX-DOS runs | `dir` shows the new disk; writes reach the image file |
+| `mag axelf` from `mag-player.dsk` | MAG plays AXELF.STM in stereo through the MagicSound, VU meters moving |

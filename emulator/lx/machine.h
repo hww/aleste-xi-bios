@@ -220,6 +220,24 @@ private:
     double   ay_acc = 0;
     void     ay_env_restart();
     void     ay_sample(int& l, int& r);
+    // MagicSound del 520EX (magic_sound.sv): 8237 + 2 x 8254 + DAC por canal
+    struct MagicSound {
+        uint16_t base_adr[4] = {}, cur_adr[4] = {}, base_cnt[4] = {}, cur_cnt[4] = {};
+        uint8_t  dmode[4] = {}, dmask = 0x0F, tc_stat = 0;
+        bool     ff = false;
+        uint16_t reload[6] = {};
+        int32_t  tcount[6] = {};
+        uint8_t  rwmode[6] = {3, 3, 3, 3, 3, 3};
+        bool     lsb_next[6] = {true, true, true, true, true, true};
+        uint8_t  vol[4] = {}, page[4][4] = {{0, 1, 2, 3}, {0, 1, 2, 3}, {0, 1, 2, 3}, {0, 1, 2, 3}};
+        uint8_t  dac[4] = {0x80, 0x80, 0x80, 0x80};
+        bool     nmi = false;
+    } ms;
+    uint8_t  ms_read(uint16_t port);
+    void     ms_write(uint16_t port, uint8_t v);
+    void     ms_time(int tstates);
+    void     ms_dma(int ch);
+
     // Monitor: imagen en bruto y ventana visible
     std::vector<uint32_t> leg_raw, leg_fb;
     int      beam_x = 0, beam_y = 0;
