@@ -88,8 +88,10 @@ _state_buffer:
 ; -----------------------------------------------------------------------------
 
 _select_mmio_page:
+    push af
     ld a, 2          ; Страница 2: регистры палитры
     out (PORT_MMIO_PAGE), a
+    pop af
     ret
 
 _update_control_reg:

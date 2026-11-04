@@ -23,8 +23,9 @@
 *.dll
 
 # Fortran module files
-*.mod
-*.smod
+# ВНИМАНИЕ: *.mod конфликтует с MOD-музыкой (test/*.MOD).
+# Если в проекте есть/будет MOD-музыка — закомментируйте строку ниже.
+# *.mod
 
 # Compiled Static libraries
 *.lai
@@ -40,11 +41,16 @@
 # debug information files
 *.dwo
 
+# z88dk артефакты
+*.sym
+*.map
+*.lst
+build/*.i
 
-*.i
+# сборка
+build/
+output/
 
+# личные настройки редактора
+.vscode/
 
-bin
-build
-out
-output
