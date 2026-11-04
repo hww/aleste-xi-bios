@@ -214,6 +214,29 @@ make run
 
 ---
 
+## The `shaeon` Branch — MiSTer Port and Extended BIOS
+
+The `shaeon` branch in this repository contains work merged from the
+**AlesteLX_MiSTer** project:
+
+- **Repository:** [shaeon/AlesteLX_MiSTer](https://github.com/shaeon/AlesteLX_MiSTer)
+
+That project takes Aleste LX beyond the frozen state described above. It provides:
+
+- A MiSTer FPGA core for Aleste LX (a separate core from `Aleste520EX_MiSTer`).
+- Completed peripherals: PIC and system timer, Magic Sound 2 (4 DMA sample channels at 48 kHz), DMA/blitter, and PS/2 keyboard.
+- The `aleste-xi-bios` extended with drivers, an 80×25 console, and a small monitor.
+- `LX-DOS`, which boots `LXDOS.SYS` from disk and runs programs.
+
+In other words, `shaeon` is not a fork of the frozen architecture — it is the
+continuation of it, with the BIOS and driver model actually exercised on
+hardware (or on a faithful FPGA core of it).
+
+If you want to see what Aleste LX looks like once the pieces described in this
+README are filled in, start there.
+
+--- 
+
 ## The Driver Model
 
 Drivers are exposed through a **call table**, rather than through a collection of fixed entry-point addresses.
