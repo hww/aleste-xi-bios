@@ -7,6 +7,8 @@
 //     --keyboard us|es teclado de EE. UU. (por defecto) o espanol, como la
 //                      opcion Keyboard del OSD (--es = --keyboard es)
 //     --scale N        ventana de 320N x 240N (3 por defecto)
+//     --cmos fichero   RAM del reloj (configuracion del SETUP del 520EX);
+//                      por defecto aleste.cmo junto a boot.rom
 //     --boot amstrad   al pasar al 520EX (orden 520EX), SHIFT pulsado 2,5 s:
 //                      el SETUP arranca en modo AMSTRAD (BASIC del CPC)
 //   Depurador (consola en la terminal, ver debugger.h):
@@ -19,6 +21,12 @@
 //     --shot fichero.ppm         pantalla al final
 //     --pcm fichero              audio (estereo, 16 bits, 48 kHz)
 //     --save-a fichero           imagen del disco A al final
+//     --cmd MS:orden             orden del depurador a los MS ms (r, t 50, d C000 ...)
+// Disquetes: arrastrar un .dsk a la ventana lo pone en la unidad A (con
+// Mayus, en la B); Ctrl+F1 / Ctrl+F2 abren el dialogo de ficheros para la A /
+// la B; Ctrl+Mayus+F1 / F2 expulsan. Lo que la maquina escribe se guarda en el
+// fichero de la imagen al cambiarla, al expulsarla, al salir y cada pocos
+// segundos.
 // Mandos: el primero va a la fila 9 de la matriz (joystick del 520EX/CPC):
 // cruceta o stick izquierdo, A/Cruz fuego 1 y B/Circulo fuego 2.
 // Teclas en la ventana: las del PC van a la maquina (tambien a la matriz del
@@ -32,6 +40,44 @@
 #include <vector>
 #include "machine.h"
 #include "debugger.h"
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
+
+// ---- Elegir una imagen de disco: el dialogo del sistema (Windows) o zenity
+// (Linux, si esta instalado). Devuelve "" si se cancela.
+static std::string choose_disk(const char* title) {
+#ifdef _WIN32
+    char file[MAX_PATH] = "";
+    OPENFILENAMEA ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.lpstrFilter = "Disk images (*.dsk)\0*.dsk;*.DSK\0All files\0*.*\0";
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = sizeof(file);
+    ofn.lpstrTitle = title;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    return GetOpenFileNameA(&ofn) ? std::string(file) : std::string();
+#else
+    std::string cmd = std::string("zenity --file-selection --title='") + title +
+                      "' --file-filter='Disk images | *.dsk *.DSK' --file-filter='All files | *' 2>/dev/null";
+    FILE* p = popen(cmd.c_str(), "r");
+    if (!p) return "";
+    char buf[4096] = "";
+    if (!fgets(buf, sizeof(buf), p)) buf[0] = 0;
+    int rc = pclose(p);
+    std::string f(buf);
+    while (!f.empty() && (f.back() == '\n' || f.back() == '\r')) f.pop_back();
+    if (rc != 0 && f.empty())
+        fprintf(stderr, "No file dialog (install zenity), or drag the .dsk file into the window\n");
+    return f;
+#endif
+}
+
+static std::string base_name(const std::string& p) {
+    size_t s = p.find_last_of("/\\");
+    return s == std::string::npos ? p : p.substr(s + 1);
+}
 
 using lx::Machine;
 
@@ -138,12 +184,13 @@ static void save_ppm(const Machine& m, const std::string& path) {
 }
 
 int main(int argc, char** argv) {
-    std::string rom, dska, dskb, shot, pcm, save_a;
+    std::string rom, dska, dskb, shot, pcm, save_a, cmos;
     bool headless = false, es = false, debug = false, boot_amstrad = false;
     std::vector<std::string> syms, breaks;
     double run_ms = 0;
     int scale = 3;
     std::vector<TypeJob> jobs;
+    std::vector<std::pair<double, std::string>> cmds;      // --cmd MS:orden (depurador, sin ventana)
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
@@ -152,6 +199,7 @@ int main(int argc, char** argv) {
         else if (a == "--es") es = true;
         else if (a == "--keyboard") { std::string k = next(); es = (k == "es" || k == "ES"); }
         else if (a == "--debug") debug = true;
+        else if (a == "--cmos") cmos = next();
         else if (a == "--boot") { std::string b = next(); boot_amstrad = (b == "amstrad"); }
         else if (a == "--sym") syms.push_back(next());
         else if (a == "--break") breaks.push_back(next());
@@ -165,6 +213,11 @@ int main(int argc, char** argv) {
             std::string v = next();
             size_t c = v.find(':');
             if (c != std::string::npos) jobs.push_back({atof(v.substr(0, c).c_str()), v.substr(c + 1)});
+        }
+        else if (a == "--cmd") {
+            std::string v = next();
+            size_t c = v.find(':');
+            if (c != std::string::npos) cmds.push_back({atof(v.substr(0, c).c_str()), v.substr(c + 1)});
         }
         else if (a[0] != '-') rom = a;
         else { fprintf(stderr, "Unknown option %s\n", a.c_str()); return 1; }
@@ -180,6 +233,12 @@ int main(int argc, char** argv) {
     if (!dska.empty() && !m.fdc.mount(0, dska)) fprintf(stderr, "Cannot mount %s\n", dska.c_str());
     if (!dskb.empty() && !m.fdc.mount(1, dskb)) fprintf(stderr, "Cannot mount %s\n", dskb.c_str());
     m.layout_es = es;
+    // RAM del reloj (configuracion del SETUP del 520EX), como ALESTE.CMO
+    if (cmos.empty()) {
+        size_t sl = rom.find_last_of("/\\");
+        cmos = (sl == std::string::npos ? std::string() : rom.substr(0, sl + 1)) + "aleste.cmo";
+    }
+    m.load_cmos(cmos);
     m.boot_shift = boot_amstrad;
     m.reset();
     lx::Debugger dbg(m);
@@ -204,7 +263,9 @@ int main(int argc, char** argv) {
         double ms = 0;
         while (ms < run_ms) {
             do_typing(ms);
+            for (auto& c : cmds) if (c.first >= 0 && ms >= c.first) { dbg.run_command(c.second); c.first = -1; }
             if (!m.run_frame()) { fprintf(stderr, "Stopped: %s\n", m.stop_reason.c_str()); break; }
+            if (m.break_hit) { dbg.run_command("hist 256"); break; }  // sin ventana: se para ahi
             ms += 1000.0 / 60.0;
             if (pcmf) fwrite(m.audio().data(), 2, m.audio().size(), pcmf);
             m.audio().clear();
@@ -212,7 +273,9 @@ int main(int argc, char** argv) {
         m.render();
         if (!shot.empty()) save_ppm(m, shot);
         if (!save_a.empty()) m.fdc.save(0, save_a);
+        m.fdc.flush_all();
         if (pcmf) fclose(pcmf);
+        if (m.cmos_dirty) m.save_cmos(cmos);
         printf("cycles %llu, %.3f s\n", (unsigned long long)m.cycles, m.cycles / m.cpu_hz());
         if (m.legacy()) m.dump_legacy();
         return 0;
@@ -252,20 +315,38 @@ int main(int argc, char** argv) {
     open_pad();
     bool quit = false, full = false, console = false;
     auto set_title = [&]() {
-        std::string t = std::string("Aleste LX - keyboard ") + (m.layout_es ? "ES" : "US") +
-                        (dbg.paused() ? " - PAUSED (debugger in the terminal)" : "");
+        auto dn = [&](int d) { return m.fdc.image(d).empty() ? std::string("-") : base_name(m.fdc.image(d)); };
+        std::string t = std::string("Aleste LX - A: ") + dn(0) + "  B: " + dn(1) + " - keyboard " +
+                        (m.layout_es ? "ES" : "US") + (dbg.paused() ? " - PAUSED (debugger in the terminal)" : "");
         SDL_SetWindowTitle(win, t.c_str());
     };
+    auto insert_disk = [&](int d, const std::string& f) {
+        if (f.empty()) return;
+        if (m.fdc.mount(d, f)) printf("Drive %c: %s\n", 'A' + d, f.c_str());
+        else printf("Cannot mount %s\n", f.c_str());
+        set_title();
+    };
+    dbg.disk_hook = [&](int d, const std::string& f) {
+        if (f.empty()) { m.fdc.eject(d); printf("Drive %c: empty\n", 'A' + d); set_title(); }
+        else insert_disk(d, f);
+    };
+    SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
     if (debug || !breaks.empty()) { dbg.start_console(); console = true; }
     if (debug) dbg.set_paused(true);
     set_title();
     bool was_paused = dbg.paused();
+    double emu_ms = 0;
+    uint32_t last_flush = SDL_GetTicks();
     uint32_t t0 = SDL_GetTicks();
     double frames = 0;
     while (!quit) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) quit = true;
+            else if (e.type == SDL_DROPFILE) {
+                insert_disk((SDL_GetModState() & KMOD_SHIFT) ? 1 : 0, e.drop.file);
+                SDL_free(e.drop.file);
+            }
             else if (e.type == SDL_CONTROLLERDEVICEADDED || e.type == SDL_JOYDEVICEADDED) open_pad();
             else if (e.type == SDL_CONTROLLERDEVICEREMOVED || e.type == SDL_JOYDEVICEREMOVED) {
                 if (gc) { SDL_GameControllerClose(gc); gc = nullptr; }
@@ -280,6 +361,16 @@ int main(int argc, char** argv) {
                         printf("Keyboard: %s (applies at the next reset, F12)\n", m.layout_es ? "Spanish" : "US");
                         set_title();
                     } else if (down) m.reset();
+                    continue;
+                }
+                if ((SDL_GetModState() & KMOD_CTRL) &&
+                    (e.key.keysym.scancode == SDL_SCANCODE_F1 || e.key.keysym.scancode == SDL_SCANCODE_F2)) {
+                    int d = e.key.keysym.scancode == SDL_SCANCODE_F2;
+                    if (down) {
+                        if (SDL_GetModState() & KMOD_SHIFT) { m.fdc.eject(d); printf("Drive %c: empty\n", 'A' + d); set_title(); }
+                        else insert_disk(d, choose_disk(d ? "Disk for drive B:" : "Disk for drive A:"));
+                        t0 = SDL_GetTicks(); frames = 0;                  // el dialogo ha parado el tiempo
+                    }
                     continue;
                 }
                 if (e.key.keysym.scancode == SDL_SCANCODE_PAUSE || e.key.keysym.scancode == SDL_SCANCODE_SCROLLLOCK) {
@@ -299,6 +390,7 @@ int main(int argc, char** argv) {
             }
         }
         m.joy = read_joystick(gc, js);
+        if (!dbg.paused()) { do_typing(emu_ms); emu_ms += 1000.0 / 60.0; }
         if (console) dbg.poll();
         if (dbg.quit_requested()) break;
         if (!dbg.paused() && !m.run_frame()) {
@@ -306,6 +398,7 @@ int main(int argc, char** argv) {
             if (!told) { fprintf(stderr, "Stopped: %s\n", m.stop_reason.c_str()); told = true; }
         }
         if (dbg.paused() != was_paused) { was_paused = dbg.paused(); set_title(); }
+        if (SDL_GetTicks() - last_flush > 3000) { m.fdc.flush_all(); last_flush = SDL_GetTicks(); }
         if (audio) {
             auto& a = m.audio();
             if (SDL_GetQueuedAudioSize(audio) < (uint32_t)lx::AUDIO_RATE)   // menos de ~0,25 s en cola
@@ -326,6 +419,8 @@ int main(int argc, char** argv) {
         else if (wait < -500) { t0 = SDL_GetTicks(); frames = 0; }
     }
     if (audio) SDL_CloseAudioDevice(audio);
+    m.fdc.flush_all();
+    if (m.cmos_dirty) m.save_cmos(cmos);
     SDL_Quit();
     return 0;
 }

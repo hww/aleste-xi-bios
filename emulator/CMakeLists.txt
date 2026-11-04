@@ -23,6 +23,9 @@ target_compile_definitions(z80ex PRIVATE WORDS_LITTLE_ENDIAN Z80EX_VERSION_STR=1
 add_executable(alestelx lx/main_lx.cpp lx/machine.cpp lx/legacy.cpp lx/fdc765.cpp lx/debugger.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(alestelx PRIVATE Threads::Threads)
+if(WIN32)
+  target_link_libraries(alestelx PRIVATE comdlg32)    # dialogo de ficheros
+endif()
 target_link_libraries(alestelx PRIVATE z80ex)
 if(TARGET SDL2::SDL2)
   if(TARGET SDL2::SDL2main)

@@ -62,7 +62,7 @@ void Machine::reset() {
     supervisor = true; exit_pending = false;
     pic_mask = pic_pending = 0; pic_vector = 0; irq_lines = irq_prev = 0;
     tmr_ctrl = 0; tmr_reload = tmr_count = tmr_ticks = 0;
-    rtc_ram[11] = 0x02;                                 // 24 h, BCD
+    rtc_ram[10] = 0x26; rtc_ram[11] = 0x06;             // como el core: binario, 24 h
     pal_index = pal_ctrl = pal_mod = 0; border = 0x888;
     memset(crtc, 0, sizeof(crtc));
     crtc[0] = 63; crtc[1] = 40; crtc[6] = 25; crtc[9] = 7;
@@ -195,8 +195,11 @@ static uint8_t to_bcd(int v) { return (uint8_t)(((v / 10) << 4) | (v % 10)); }
 static int from_bcd(uint8_t v) { return (v >> 4) * 10 + (v & 15); }
 
 uint8_t Machine::rtc_read(uint8_t r) {
+    int64_t now = (int64_t)time(nullptr);
+    if (now != rtc_last_sec) { rtc_last_sec = now; rtc_uf = true; }  // una actualizacion por segundo
     if (r >= 10) {
         if (r == 10) return rtc_ram[10] & 0x7F;            // sin UIP
+        if (r == 12) { uint8_t v = rtc_uf ? 0x10 : 0; rtc_uf = false; return v; }   // UF, se borra al leer
         if (r == 13) return 0x80;                           // VRT: pila bien
         return rtc_ram[r];
     }
@@ -210,14 +213,18 @@ uint8_t Machine::rtc_read(uint8_t r) {
     case 6: v = tm.tm_wday + 1; break;
     case 7: v = tm.tm_mday; break;
     case 8: v = tm.tm_mon + 1; break;
-    case 9: v = tm.tm_year % 100; break;
+    case 9: v = tm.tm_year + 1900 - 1980; break;        // anos desde 1980 (SETUP del 520EX, core)
     default: return rtc_ram[r];                             // alarmas
     }
     return (rtc_ram[11] & 0x04) ? (uint8_t)v : to_bcd(v);
 }
 
 void Machine::rtc_write(uint8_t r, uint8_t v) {
-    if (r >= 10 || r == 1 || r == 3 || r == 5) { rtc_ram[r] = v; return; }
+    if (r >= 10 || r == 1 || r == 3 || r == 5) {
+        if (r >= 10 && rtc_ram[r] != v) cmos_dirty = true;
+        rtc_ram[r] = v;
+        return;
+    }
     int val = (rtc_ram[11] & 0x04) ? v : from_bcd(v);
     time_t now = time(nullptr);
     time_t t = now + rtc_offset;
@@ -229,10 +236,32 @@ void Machine::rtc_write(uint8_t r, uint8_t v) {
     case 6: return;
     case 7: tm.tm_mday = val; break;
     case 8: tm.tm_mon = val - 1; break;
-    case 9: tm.tm_year = 100 + val; break;
+    case 9: tm.tm_year = 80 + val; break;
     }
     tm.tm_isdst = -1;
     rtc_offset = (int64_t)mktime(&tm) - (int64_t)now;
+}
+
+bool Machine::load_cmos(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    uint8_t buf[64];
+    size_t n = fread(buf, 1, 64, f);
+    fclose(f);
+    if (n < 64) return false;
+    for (int i = 10; i < 64; i++) rtc_ram[i] = buf[i];      // la hora es la del PC
+    cmos_dirty = false;
+    return true;
+}
+
+bool Machine::save_cmos(const std::string& path) const {
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) return false;
+    uint8_t buf[64] = {};                                   // 0-9: la hora no se guarda
+    for (int i = 10; i < 64; i++) buf[i] = rtc_ram[i];
+    fwrite(buf, 1, 64, f);
+    fclose(f);
+    return true;
 }
 
 // ---------------------------------------------------------------- DMA
@@ -343,9 +372,11 @@ void Machine::ms2_tick() {
         out_l = ((acc_l >> 10) * ms2_vol_l) >> 8;
         out_r = ((acc_r >> 10) * ms2_vol_r) >> 8;
     }
-    // como en el core: la MS2 entra a la mitad en la mezcla de audio
-    audio_buf.push_back((int16_t)std::clamp(out_l >> 1, -32768, 32767));
-    audio_buf.push_back((int16_t)std::clamp(out_r >> 1, -32768, 32767));
+    // como en el core: la MS2 entra a la mitad en la mezcla, con el AY
+    int ay_l = 0, ay_r = 0;
+    if (legacy()) ay_sample(ay_l, ay_r);
+    audio_buf.push_back((int16_t)std::clamp((out_l >> 1) + ay_l, -32768, 32767));
+    audio_buf.push_back((int16_t)std::clamp((out_r >> 1) + ay_r, -32768, 32767));
 
     if (ms2_tmr_period) {
         if (ms2_tmr_cnt <= 1) { ms2_tmr_cnt = ms2_tmr_period; if (ms2_irq_ctrl & 2) ms2_irq_stat |= 2; }

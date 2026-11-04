@@ -39,9 +39,14 @@ CPU runs at 4 MHz. The picture is the monitor's visible window (768 x 272,
 pressed), like the core's boot option: the 520EX SETUP then starts in
 AMSTRAD mode (CPC BASIC 1.1).
 
-Phase 1 done: 520EX boot screen and CPC BASIC with the keyboard. Still to
-come: AY sound and disk boot (AlesteDOS / MSX-DOS), then MagicSound, RTC,
-mouse and tape.
+Also emulated: the AY-3-8910 (YM2149 volume table, ABC stereo like the
+core) and the MC146818 clock shared with the AY on the PPI port A (FABF D5,
+PC2..PC0 commands, UF update flag, years since 1980), which the 520EX needs
+to find its floppy drives.
+
+Done: 520EX boot screen, CPC BASIC with keyboard and sound, and MSX-DOS 1.04
+booting from `alestedos-dev.dsk` (FOTON-127 BIOS, COMMAND 2.2A, DIR, disk
+change). Still to come: MagicSound (MAG and its STM songs), mouse and tape.
 
 Not yet in native mode: IPC and the graphics accelerator.
 
@@ -56,12 +61,27 @@ from `../deps/z80ex`.
 ## Use
 
     alestelx [-a disk.dsk] [-b disk.dsk] [--keyboard us|es] [--scale N]
-             [--debug] [--sym file.map] [--break addr] boot.rom
+             [--debug] [--sym file.map] [--break addr] [--boot amstrad]
+             [--cmos file] boot.rom
 
 `boot.rom` is the same file as on the MiSTer SD (`games/AlesteLX/boot.rom`:
 LX.ROM, optionally followed by AL512.BIN). `--keyboard` is the OSD Keyboard
 option (US by default); the BIOS reads it at boot, and `KEYB US|ES` changes it
 in LX-DOS.
+
+### Floppy disks
+
+Drag a `.dsk` file into the window to insert it in drive A (hold Shift for
+drive B), or use Ctrl+F1 / Ctrl+F2 to pick one with a file dialog (Windows;
+on Linux, `zenity` if installed); Ctrl+Shift+F1 / F2 eject. The debugger
+also has `disk a|b file` and `eject a|b`. The window title shows what is in
+each drive. Whatever the machine writes goes back to the image file when the
+disk is changed or ejected, on exit and every few seconds, as the MiSTer does
+with the SD card.
+
+The MC146818 clock RAM (the 520EX SETUP configuration) is kept in
+`aleste.cmo` next to `boot.rom` (`--cmos file` to change it), like the core's
+ALESTE.CMO. The time is the PC's.
 
 Keys in the window: the PC keyboard goes to the machine. F12 resets,
 Shift+F12 switches the keyboard layout (applies at the next reset, like the
@@ -86,7 +106,9 @@ DOS, etc.).
 | `r` | registers, MMU (supervisor/user, control, MMIO page, slots, banks) and PIC |
 | `d [addr] [n]` | disassemble, with symbols |
 | `m [addr] [n]` / `pm phys [n]` | memory as the CPU sees it / physical memory |
-| `b addr\|symbol\|p:phys` | breakpoint (logical, symbol or physical address) |
+| `b addr\|symbol\|p:phys\|pg:NN` | breakpoint (logical, symbol, physical address or any address in physical 16 KB page NN) |
+| `hist [n]` | the last n executed instructions, disassembled from where they ran |
+| `disk a\|b file`, `eject a\|b` | change or eject a floppy |
 | `bl`, `bc n\|all` | list and clear breakpoints |
 | `sym file.map` | load symbols |
 | `q` | quit |
@@ -99,7 +121,8 @@ Headless mode, for automated tests (the same checks as the core testbench):
              --shot screen.ppm --pcm audio.raw --save-a after.dsk boot.rom
 
 `--type MS:text` types the text at MS milliseconds of machine time (`|` is
-Enter, `~` Esc), `--shot` saves the screen (PPM), `--pcm` the Magic Sound 2
+Enter, `~` Esc), `--cmd MS:command` runs a debugger command then (with a
+breakpoint, the run stops there and prints the history), `--shot` saves the screen (PPM), `--pcm` the Magic Sound 2
 output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 
 ## Validation (same results as the core in simulation)
@@ -112,4 +135,6 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
 | `520ex` from the ROM monitor | 520EX boot screen (high resolution, 16 colours, MAPMOD) |
-| `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program |
+| `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program; `sound 1,284,100` gives 220.0 Hz on the left channel |
+| `520ex` with `alestedos-dev.dsk` in A | MSX-DOS 1.04 boots (FOTON-127 BIOS, COMMAND 2.2A, today's date), `dir` lists the 25 files |
+| disk change while MSX-DOS runs | `dir` shows the new disk; writes reach the image file |

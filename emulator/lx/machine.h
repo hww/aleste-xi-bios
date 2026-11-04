@@ -78,7 +78,8 @@ public:
     void     dump_legacy() const;                       // estado del modo legacy (pruebas)
     uint64_t leg_frames = 0, leg_irqs = 0;
 
-    uint32_t translate(uint16_t addr) const;            // direccion de la CPU -> fisica
+    uint32_t translate(uint16_t addr) const;            // direccion de la CPU -> fisica (MMU nativa)
+    uint32_t cpu_phys(uint16_t a) const { return legacy() ? leg_translate(a, false) : translate(a); }
     uint8_t  peek(uint16_t addr) const { uint32_t p = legacy() ? leg_translate(addr, false) : translate(addr); return p < 0xFF0000 ? mem[p] : 0xFF; }
     // estado de la MMU para el depurador
     bool     is_supervisor() const { return supervisor; }
@@ -126,8 +127,18 @@ private:
     // ---- Reloj MC146818 (pagina 0, 60h/61h)
     uint8_t  rtc_idx = 0, rtc_ram[64] = {};
     int64_t  rtc_offset = 0;                            // segundos respecto al reloj del PC
+    int64_t  rtc_last_sec = 0;                          // para UF (registro C)
+    bool     rtc_uf = false;
     uint8_t  rtc_read(uint8_t r);
     void     rtc_write(uint8_t r, uint8_t v);
+public:
+    // RAM del reloj (0E-3F: configuracion del SETUP del 520EX), como el
+    // ALESTE.CMO del core
+    bool     load_cmos(const std::string& path);
+    bool     save_cmos(const std::string& path) const;
+    bool     cmos_dirty = false;
+private:
+    uint8_t  rtc_leg_addr = 0;                          // modo legacy: PPI PC2..0 = 2 direccion
 
     // ---- Paleta y CRTC (pagina 2)
     uint8_t  pal_index = 0, pal_ctrl = 0, pal_mod = 0, pal_lo = 0;
@@ -202,6 +213,13 @@ private:
     // PPI 8255 y AY (registros; el sonido, en la fase 2)
     uint8_t  ppi_a = 0, ppi_c = 0, ppi_ctrl = 0x9B, ay_addr = 0, ay_reg[16] = {};
     void     ppi_c_changed();
+    // AY-3-8910 (YM2149, 1 MHz): sonido
+    int      ay_tcnt[3] = {}, ay_ncnt = 0, ay_ecnt = 0, ay_estep = 0;
+    bool     ay_tout[3] = {}, ay_eatt = false, ay_ehold = false;
+    uint32_t ay_lfsr = 1;
+    double   ay_acc = 0;
+    void     ay_env_restart();
+    void     ay_sample(int& l, int& r);
     // Monitor: imagen en bruto y ventana visible
     std::vector<uint32_t> leg_raw, leg_fb;
     int      beam_x = 0, beam_y = 0;

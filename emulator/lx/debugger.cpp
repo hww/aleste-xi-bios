@@ -52,10 +52,12 @@ void Debugger::continue_run() {
 
 bool Debugger::check(uint16_t pc) {
     if (pause) return true;
+    hist_pc[hist_n & 255] = pc; hist_ph[hist_n & 255] = m.cpu_phys(pc); hist_n++;
     if (resuming) { resuming = false; if (pc == resume_pc) return false; }
     bool hit = false;
     if (temp_bp >= 0 && pc == temp_bp) { temp_bp = -1; hit = true; }
-    else if (bps.count(pc) || (!pbps.empty() && pbps.count(m.translate(pc)))) {
+    else if (bps.count(pc) || (!pbps.empty() && pbps.count(m.cpu_phys(pc))) ||
+             (!pgbps.empty() && pgbps.count(m.cpu_phys(pc) >> 14))) {
         printf("\nBreakpoint at %04X%s\n", pc, label(pc).c_str());
         hit = true;
     }
@@ -115,6 +117,14 @@ bool Debugger::parse_addr(const std::string& s0, uint32_t& out) {
 
 static Z80EX_BYTE dasm_read(Z80EX_WORD a, void* u) { return ((Machine*)u)->peek(a); }
 
+// historial: se desensambla desde la direccion fisica en la que se ejecuto
+struct PhysRead { Machine* m; uint16_t pc; uint32_t ph; };
+static Z80EX_BYTE dasm_read_phys(Z80EX_WORD a, void* u) {
+    PhysRead* r = (PhysRead*)u;
+    uint32_t p = (r->ph + (uint16_t)(a - r->pc)) & 0xFFFFFF;
+    return r->m->mem[p];
+}
+
 int Debugger::disasm(uint16_t a, std::string& text) {
     char out[64];
     int t1, t2;
@@ -139,7 +149,7 @@ void Debugger::show_disasm(uint16_t a, int n) {
         if (it != sym_by_addr.end()) printf("%s:\n", it->second.c_str());
         char bytes[16] = "";
         for (int k = 0; k < len && k < 4; k++) sprintf(bytes + k * 3, "%02X ", m.peek(a + k));
-        printf("  %04X  %06X  %-12s %s\n", a, m.translate(a), bytes, t.c_str());
+        printf("  %04X  %06X  %-12s %s\n", a, m.cpu_phys(a), bytes, t.c_str());
         a += len;
     }
 }
@@ -208,7 +218,8 @@ void Debugger::exec(const std::string& line) {
     if (c == "help" || c == "h" || c == "?") {
         printf("c|g continue   p pause   s [n] step   n step over   t [n] trace   r registers\n"
                "d [addr] [n] disassemble   m [addr] [n] memory   pm phys [n] physical memory\n"
-               "b addr|symbol|p:phys breakpoint   bl list   bc n|all clear   sym file.map   q quit\n");
+               "b addr|symbol|p:phys breakpoint   bl list   bc n|all clear   hist [n] history\n"
+               "disk a|b file   eject a|b   sym file.map   q quit\n");
     } else if (c == "c" || c == "g") {
         if (!a1.empty() && parse_addr(a1, addr)) temp_bp = (uint16_t)addr;   // "g dir": hasta ahi
         continue_run();
@@ -245,13 +256,30 @@ void Debugger::exec(const std::string& line) {
         int i = 0;
         for (auto b : bps) printf("%d: %04X%s\n", i++, b, label(b).c_str());
         for (auto b : pbps) printf("%d: p:%06X\n", i++, b);
+        for (auto b : pgbps) printf("   page %02X\n", b);
         if (!i) printf("No breakpoints\n");
     } else if (c == "bc") {
-        if (a1 == "all") { bps.clear(); pbps.clear(); printf("Breakpoints cleared\n"); return; }
+        if (a1 == "all") { bps.clear(); pbps.clear(); pgbps.clear(); printf("Breakpoints cleared\n"); return; }
         int k = atoi(a1.c_str()), i = 0;
         for (auto it = bps.begin(); it != bps.end(); ++it, ++i) if (i == k) { bps.erase(it); return; }
         for (auto it = pbps.begin(); it != pbps.end(); ++it, ++i) if (i == k) { pbps.erase(it); return; }
         printf("No breakpoint %d\n", k);
+    } else if (c == "disk" || c == "eject") {
+        int d = (a1 == "b" || a1 == "B") ? 1 : 0;
+        if (c == "disk" && a2.empty()) { printf("disk a|b file\n"); return; }
+        if (disk_hook) disk_hook(d, c == "eject" ? std::string() : a2);
+        else if (c == "eject") m.fdc.eject(d);
+        else printf(m.fdc.mount(d, a2) ? "Drive %c: %s\n" : "Cannot mount %c: %s\n", 'A' + d, a2.c_str());
+    } else if (c == "hist") {
+        n = a1.empty() ? 32 : std::min(256, atoi(a1.c_str()));
+        n = std::min(n, hist_n);
+        for (int i = hist_n - n; i < hist_n; i++) {
+            char out[64];
+            int t1, t2;
+            PhysRead pr{&m, hist_pc[i & 255], hist_ph[i & 255]};
+            z80ex_dasm(out, sizeof(out), 0, &t1, &t2, dasm_read_phys, pr.pc, &pr);
+            printf("  %04X  %06X  %s\n", pr.pc, pr.ph, out);
+        }
     } else if (c == "sym") {
         load_symbols(a1);
     } else if (c == "q" || c == "quit") {
@@ -263,6 +291,12 @@ void Debugger::exec(const std::string& line) {
 
 bool Debugger::add_breakpoint(const std::string& spec) {
     uint32_t a;
+    if (spec.rfind("pg:", 0) == 0) {
+        if (!parse_addr(spec.substr(3), a)) return false;
+        pgbps.insert(a & 0x3FF);
+        printf("Breakpoint on physical page %02X (%06X-%06X)\n", a & 0x3FF, (a & 0x3FF) << 14, ((a & 0x3FF) << 14) + 0x3FFF);
+        return true;
+    }
     if (spec.rfind("p:", 0) == 0) {
         if (!parse_addr(spec.substr(2), a)) return false;
         pbps.insert(a & 0xFFFFFF);

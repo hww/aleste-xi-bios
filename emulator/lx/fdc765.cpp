@@ -3,18 +3,42 @@
 #include "fdc765.h"
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
+
+static bool fdc_log() { static int v = -1; if (v < 0) v = getenv("ALESTELX_FDC_LOG") != nullptr; return v; }
 
 namespace lx {
 
 static constexpr int TRACKS = 80, HEADS = 2, SPT = 9, SECSZ = 512;
 
 bool Fdc765::mount(int d, const std::string& path) {
+    d &= 1;
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return false;
-    drv[d & 1].img.assign(TRACKS * HEADS * SPT * SECSZ, 0xE5);
-    size_t n = fread(drv[d & 1].img.data(), 1, drv[d & 1].img.size(), f);
+    std::vector<uint8_t> img(TRACKS * HEADS * SPT * SECSZ, 0xE5);
+    size_t n = fread(img.data(), 1, img.size(), f);
     fclose(f);
-    if (n < 160 * 1024) { drv[d & 1].img.clear(); return false; }
+    if (n < 160 * 1024) return false;
+    flush(d);                                           // la anterior, con sus cambios
+    drv[d].img.swap(img);
+    drv[d].path = path;
+    drv[d].dirty = false;
+    return true;
+}
+
+void Fdc765::eject(int d) {
+    d &= 1;
+    flush(d);
+    drv[d].img.clear();
+    drv[d].path.clear();
+    drv[d].dirty = false;
+}
+
+bool Fdc765::flush(int d) {
+    d &= 1;
+    if (!drv[d].dirty || drv[d].path.empty()) return true;
+    if (!save(d, drv[d].path)) return false;
+    drv[d].dirty = false;
     return true;
 }
 
@@ -69,7 +93,7 @@ void Fdc765::write_data(uint8_t v) {
             Drive& d = drv[cur_drive];
             for (int r = sect_r, i = 0; r <= sect_eot; r++, i++) {
                 int l = lba(cur_drive, sect_c, sect_h, r);
-                if (l >= 0) memcpy(&d.img[l * SECSZ], &buf[i * SECSZ], SECSZ);
+                if (l >= 0) { memcpy(&d.img[l * SECSZ], &buf[i * SECSZ], SECSZ); d.dirty = true; }
             }
             finish_rw(0x40 | (sect_h << 2) | cur_drive, 0x80, 0x00);
         }
@@ -88,6 +112,11 @@ uint8_t Fdc765::read_data() {
         return v;
     }
     if (phase == RESULT) {
+        if (fdc_log() && res_pos == 0) {
+            fprintf(stderr, "765 res");
+            for (int i = 0; i < res_len; i++) fprintf(stderr, " %02X", res[i]);
+            fprintf(stderr, "\n");
+        }
         uint8_t v = res[res_pos++];
         if (res_pos >= res_len) { phase = CMD; res_len = res_pos = 0; }
         return v;
@@ -103,6 +132,11 @@ void Fdc765::finish_rw(uint8_t st0, uint8_t st1, uint8_t st2) {
 
 void Fdc765::start_command() {
     uint8_t op = cmd[0] & 0x1F;
+    if (fdc_log()) {
+        fprintf(stderr, "765 cmd");
+        for (int i = 0; i < cmd_len; i++) fprintf(stderr, " %02X", cmd[i]);
+        fprintf(stderr, "\n");
+    }
     auto result = [&](std::initializer_list<uint8_t> r) {
         res_len = 0;
         for (uint8_t b : r) res[res_len++] = b;

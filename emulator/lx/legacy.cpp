@@ -27,6 +27,9 @@ void Machine::leg_reset() {
     ga_hcnt = 0; ga_vcnt = 7; ga_hs = ga_vs = prev_crt_hs = prev_crt_vs = false;
     irq_cnt = 0; vs_wait = 0; ga_irq = false;
     ppi_a = 0; ppi_c = 0; ppi_ctrl = 0x9B; ay_addr = 0; memset(ay_reg, 0, sizeof(ay_reg));
+    ay_reg[7] = 0xFF;
+    for (int c = 0; c < 3; c++) { ay_tcnt[c] = 0; ay_tout[c] = false; }
+    ay_ncnt = ay_ecnt = ay_estep = 0; ay_lfsr = 1; ay_acc = 0; ay_ehold = true; ay_eatt = false;
     leg_raw.assign(1024 * 320, 0xFF000000);
     leg_fb.assign(LEG_W * LEG_H, 0xFF000000);
     beam_x = beam_y = 0; beam_t = 0;
@@ -68,7 +71,9 @@ uint8_t Machine::leg_pread(uint16_t port) {
     if (!(port & 0x0800)) {
         switch ((port >> 8) & 3) {
         case 0:                                                 // A: AY (BC1 = 1, BDIR = 0) o la salida
-            if (ppi_ctrl & 0x10) {
+            if ((ppi_ctrl & 0x10) && (extport & 0x20) && (ppi_c & 7) == 5) {
+                v &= rtc_read(rtc_leg_addr);                    // el reloj pone el dato (FABF D5, PC = 5)
+            } else if (ppi_ctrl & 0x10) {
                 uint8_t ay = 0xFF;
                 if ((ppi_c & 0xC0) == 0x40) {
                     if (ay_addr == 14) {                        // puerto A del AY: la fila del teclado
@@ -101,10 +106,21 @@ uint8_t Machine::leg_pread(uint16_t port) {
 }
 
 void Machine::ppi_c_changed() {
+    // reloj MC146818 (FABF D5): PC2..0 = 2 direccion, 4 escritura (dato en el
+    // puerto A de la PPI), 5 lectura
+    if (extport & 0x20) {
+        switch (ppi_c & 7) {
+        case 2: rtc_leg_addr = ppi_a & 63; break;
+        case 4: rtc_write(rtc_leg_addr, ppi_a); break;
+        default: break;
+        }
+    }
     // AY: BDIR = PC7, BC1 = PC6, dato por el puerto A de la PPI
     switch (ppi_c & 0xC0) {
     case 0xC0: ay_addr = ppi_a & 0x0F; break;                   // latch de direccion
-    case 0x80: if (ay_addr < 16) ay_reg[ay_addr] = ppi_a; break; // escritura
+    case 0x80:                                                  // escritura
+        if (ay_addr < 16) { ay_reg[ay_addr] = ppi_a; if (ay_addr == 13) ay_env_restart(); }
+        break;
     default: break;
     }
 }
@@ -136,7 +152,7 @@ void Machine::leg_pwrite(uint16_t port, uint8_t v) {
     // PPI (A11 = 0)
     if (!(port & 0x0800)) {
         switch ((port >> 8) & 3) {
-        case 0: ppi_a = v; ppi_c_changed(); break;
+        case 0: ppi_a = v; if (!(extport & 0x20)) ppi_c_changed(); break;
         case 2: ppi_c = v; ppi_c_changed(); break;
         case 3:
             if (v & 0x80) { ppi_ctrl = v; ppi_a = 0; ppi_c = 0; ppi_c_changed(); }
@@ -309,6 +325,63 @@ void Machine::dump_legacy() const {
     printf("inks:");
     for (int i = 0; i < 16; i++) printf(" %02X", ga_ink[i]);
     printf(" border=%02X\n", ga_border);
+}
+
+// ---------------------------------------------------------------- AY
+// YM2149 a 1 MHz (como el core: 54 MHz / 54). Tono: un cambio cada 8 x TP
+// relojes; ruido: el LFSR de 17 bits avanza cada 16 x NP; envolvente de 32
+// pasos, un paso cada 8 x EP relojes. Volumen con la tabla del YM2149.v del
+// core (32 niveles; el volumen fijo n es el nivel 2n + 1).
+static const uint8_t ym_vol[32] = {
+    0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x04, 0x06, 0x07, 0x09, 0x0a, 0x0c, 0x0e, 0x11, 0x13,
+    0x17, 0x1b, 0x20, 0x25, 0x2c, 0x35, 0x3e, 0x47, 0x54, 0x66, 0x77, 0x88, 0xa1, 0xc0, 0xe0, 0xff};
+
+void Machine::ay_env_restart() {
+    ay_ecnt = 0; ay_estep = 0; ay_ehold = false;
+    ay_eatt = ay_reg[13] & 4;
+}
+
+void Machine::ay_sample(int& l, int& r) {
+    ay_acc += 1e6 / AUDIO_RATE;
+    while (ay_acc >= 1.0) {
+        ay_acc -= 1.0;
+        for (int c = 0; c < 3; c++) {
+            int tp = (ay_reg[c * 2] | ((ay_reg[c * 2 + 1] & 15) << 8));
+            if (!tp) tp = 1;
+            if (++ay_tcnt[c] >= tp * 8) { ay_tcnt[c] = 0; ay_tout[c] = !ay_tout[c]; }
+        }
+        int np = ay_reg[6] & 31;
+        if (!np) np = 1;
+        if (++ay_ncnt >= np * 16) {
+            ay_ncnt = 0;
+            uint32_t bit = ((ay_lfsr >> 0) ^ (ay_lfsr >> 3)) & 1;
+            ay_lfsr = (ay_lfsr >> 1) | (bit << 16);
+        }
+        int ep = ay_reg[11] | (ay_reg[12] << 8);
+        if (!ep) ep = 1;
+        if (!ay_ehold && ++ay_ecnt >= ep * 8) {
+            ay_ecnt = 0;
+            if (++ay_estep >= 32) {
+                uint8_t sh = ay_reg[13];
+                if (!(sh & 8)) { ay_ehold = true; ay_eatt = false; ay_estep = 31; }   // una vez y a 0
+                else if (sh & 1) { ay_ehold = true; ay_estep = 31; if (sh & 2) ay_eatt = !ay_eatt; }
+                else { ay_estep = 0; if (sh & 2) ay_eatt = !ay_eatt; }
+            }
+        }
+    }
+    int env = ay_ehold && !(ay_reg[13] & 8) ? 0 : (ay_eatt ? ay_estep : 31 - ay_estep);
+    bool noise = ay_lfsr & 1;
+    int out[3];
+    for (int c = 0; c < 3; c++) {
+        bool t = ay_tout[c] || (ay_reg[7] & (1 << c));
+        bool n = noise || (ay_reg[7] & (8 << c));
+        uint8_t a = ay_reg[8 + c];
+        int lvl = (a & 0x10) ? env : ((a & 15) * 2 + ((a & 15) ? 1 : 0));
+        out[c] = (t && n) ? ym_vol[lvl & 31] : 0;
+    }
+    // estereo ABC como el core: A x 2 + B a la izquierda, C x 2 + B a la derecha
+    l = (out[0] * 2 + out[1]) << 4;
+    r = (out[2] * 2 + out[1]) << 4;
 }
 
 } // namespace lx

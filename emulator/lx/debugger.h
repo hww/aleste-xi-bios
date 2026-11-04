@@ -12,7 +12,10 @@
 //   d [dir] [n]        desensamblar         m [dir] [n]   memoria (CPU)
 //   pm fisica [n]      memoria fisica (24 bits)
 //   b dir|simbolo      punto de ruptura (logico)    b p:fisica  (fisico)
+//   b pg:NN            al ejecutar cualquier cosa de la pagina fisica NN (16 KB)
 //   bl                 lista                bc n | bc all  borrar
+//   disk a|b fichero   cambiar el disco        eject a|b   expulsar
+//   hist [n]           las ultimas n instrucciones ejecutadas (hasta 256)
 //   sym fichero.map    cargar simbolos      q        salir
 // Las direcciones van en hexadecimal (C000, 0xC000, $C000) o por simbolo.
 #pragma once
@@ -24,6 +27,7 @@
 #include <deque>
 #include <mutex>
 #include <thread>
+#include <functional>
 #include "machine.h"
 
 namespace lx {
@@ -41,15 +45,22 @@ public:
     bool load_symbols(const std::string& path);
     bool add_breakpoint(const std::string& spec);
     bool check(uint16_t pc);                    // enganche de Machine::break_check
+    void run_command(const std::string& line) { exec(line); }
+    // disk a|b fichero, eject a|b: lo hace el programa principal (fichero "" = expulsar)
+    std::function<void(int, const std::string&)> disk_hook;
 
 private:
     Machine& m;
     bool pause = false, quit = false;
     std::set<uint16_t> bps;
     std::set<uint32_t> pbps;
+    std::set<uint32_t> pgbps;                   // paginas fisicas de 16 KB
     int  temp_bp = -1;                          // para "n"
     uint16_t resume_pc = 0;                      // no parar en el mismo sitio al seguir
     bool resuming = false;
+    uint16_t hist_pc[256] = {};
+    uint32_t hist_ph[256] = {};
+    int      hist_n = 0;
     std::map<uint16_t, std::string> sym_by_addr;
     std::map<std::string, uint16_t> addr_by_sym;
 

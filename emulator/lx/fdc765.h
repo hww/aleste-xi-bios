@@ -16,8 +16,15 @@ namespace lx {
 
 class Fdc765 {
 public:
+    // Montar una imagen (si la unidad tenia otra con cambios, se guarda antes),
+    // expulsar y guardar en su fichero lo que la maquina haya escrito
     bool mount(int drive, const std::string& path);
+    void eject(int drive);
+    bool flush(int drive);                      // guarda si hay cambios
+    void flush_all() { flush(0); flush(1); }
     bool save(int drive, const std::string& path) const;
+    const std::string& image(int drive) const { return drv[drive & 1].path; }
+    bool dirty(int drive) const { return drv[drive & 1].dirty; }
     void reset();
 
     uint8_t read_status();
@@ -31,6 +38,8 @@ public:
 private:
     struct Drive {
         std::vector<uint8_t> img;
+        std::string path;
+        bool dirty = false;
         int  pcn = 0;
         bool seek_end = false;
     } drv[2];
