@@ -47,4 +47,4 @@
 bin
 build
 out
-output
+outputemulator/build/
