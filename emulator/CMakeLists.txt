@@ -15,12 +15,14 @@ endif()
 find_package(SDL2 REQUIRED)
 
 set(Z80EX ${CMAKE_CURRENT_SOURCE_DIR}/../deps/z80ex)
-add_library(z80ex STATIC ${Z80EX}/z80ex.c)
+add_library(z80ex STATIC ${Z80EX}/z80ex.c ${Z80EX}/z80ex_dasm.c)
 target_include_directories(z80ex PUBLIC ${Z80EX}/include ${Z80EX})
 target_compile_definitions(z80ex PRIVATE WORDS_LITTLE_ENDIAN Z80EX_VERSION_STR=1.1.21 Z80EX_API_REVISION=1
                            Z80EX_VERSION_MAJOR=1 Z80EX_VERSION_MINOR=21 Z80EX_RELEASE_TYPE=)
 
-add_executable(alestelx lx/main_lx.cpp lx/machine.cpp lx/fdc765.cpp)
+add_executable(alestelx lx/main_lx.cpp lx/machine.cpp lx/fdc765.cpp lx/debugger.cpp)
+find_package(Threads REQUIRED)
+target_link_libraries(alestelx PRIVATE Threads::Threads)
 target_link_libraries(alestelx PRIVATE z80ex)
 if(TARGET SDL2::SDL2)
   if(TARGET SDL2::SDL2main)
@@ -31,3 +33,9 @@ else()
   target_include_directories(alestelx PRIVATE ${SDL2_INCLUDE_DIRS})
   target_link_libraries(alestelx PRIVATE ${SDL2_LIBRARIES})
 endif()
+
+# Pruebas: ctest --test-dir build
+enable_testing()
+add_executable(test_matrix tests/test_matrix.cpp lx/machine.cpp lx/fdc765.cpp)
+target_link_libraries(test_matrix PRIVATE z80ex)
+add_test(NAME keyboard_matrix COMMAND test_matrix)

@@ -14,6 +14,10 @@
 #include <algorithm>
 
 namespace lx {
+#include "kbdmatrix.inc"
+}
+
+namespace lx {
 
 // ---------------------------------------------------------------- z80ex
 static Z80EX_BYTE cb_mread(Z80EX_CONTEXT*, Z80EX_WORD a, int m1, void* u)   { return ((Machine*)u)->mread(a, m1); }
@@ -67,6 +71,7 @@ void Machine::reset() {
     ms2_ctrl = 0; ms2_vol_l = ms2_vol_r = 255; ms2_irq_ctrl = ms2_irq_stat = 0;
     ms2_tmr_period = ms2_tmr_cnt = 0;
     kq.clear(); kq_ovf = false; kin_ctrl = 0;
+    memset(kmatrix, 0, sizeof(kmatrix));
     fdc.reset();
     stop_reason.clear();
     z80ex_reset(cpu);
@@ -358,7 +363,13 @@ void Machine::ms2_tick() {
 }
 
 // ---------------------------------------------------------------- teclado
+// Cola de eventos (lo que lee la BIOS) y matriz del 520EX/CPC (para juegos),
+// como lx_input.sv y kbd_520ex.sv
 void Machine::key_event(uint8_t code, bool pressed, bool extended) {
+    for (auto& k : kbd_matrix_keys)
+        if (k.code == code && k.ext == (extended ? 1 : 0)) {
+            if (pressed) kmatrix[k.row] |= 1 << k.bit; else kmatrix[k.row] &= ~(1 << k.bit);
+        }
     if (kq.size() >= 16) { kq_ovf = true; return; }
     kq.push_back({code, pressed, extended});
 }
@@ -415,7 +426,11 @@ uint8_t Machine::mmio_read(uint32_t a) {
         case 0x03: return kin_ctrl;
         case 0x04: return layout_es ? 1 : 0;
         }
-        if (r >= 0x10 && r <= 0x1A) return 0xFF;               // matriz: nada pulsado (por ahora)
+        if (r >= 0x10 && r <= 0x1A) {                          // matriz, activo a 0 (cols2)
+            uint8_t k = kmatrix[r - 0x10];
+            if (r == 0x19) k |= joy;
+            return ~k;
+        }
         return 0xFF;
     case 9:
         if (r == 0x00) return fdc.read_status();
@@ -515,27 +530,39 @@ void Machine::render() {
 }
 
 // ---------------------------------------------------------------- bucle
-bool Machine::run_frame() {
-    if (!stop_reason.empty()) return false;
+int Machine::step() {
     double hz = cpu_hz();
-    double frame_cycles = hz / 60.0;
+    pic_update();
+    int t;
+    if ((pic_pending & pic_mask) && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
+    else t = z80ex_step(cpu);
+    if (t <= 0) t = 4;
+    cycles += t;
+    frame_acc += t;
+    us_acc += t;
     double us_cycles = hz / 1e6, smp_cycles = hz / AUDIO_RATE;
+    if (us_acc >= us_cycles) { int n = (int)(us_acc / us_cycles); us_acc -= n * us_cycles; timer_us(n); }
+    sample_acc += t;
+    while (sample_acc >= smp_cycles) { sample_acc -= smp_cycles; ms2_tick(); }
+    return t;
+}
+
+bool Machine::run_frame() {
+    break_hit = false;
+    if (!stop_reason.empty()) return false;
+    double frame_cycles = cpu_hz() / 60.0;
     while (frame_acc < frame_cycles) {
         if (legacy()) {
             stop_reason = "legacy (520EX/CPC) mode is not emulated yet";
             return false;
         }
-        pic_update();
-        int t;
-        if ((pic_pending & pic_mask) && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
-        else t = z80ex_step(cpu);
-        if (t <= 0) t = 4;
-        cycles += t;
-        frame_acc += t;
-        us_acc += t;
-        if (us_acc >= us_cycles) { int n = (int)(us_acc / us_cycles); us_acc -= n * us_cycles; timer_us(n); }
-        sample_acc += t;
-        while (sample_acc >= smp_cycles) { sample_acc -= smp_cycles; ms2_tick(); }
+        // z80ex trata los prefijos como pasos sueltos: el depurador solo mira
+        // el principio de cada instruccion
+        if (break_check && !z80ex_last_op_type(cpu) && break_check(z80ex_get_reg(cpu, regPC))) {
+            break_hit = true;
+            return true;
+        }
+        step();
     }
     frame_acc -= frame_cycles;
     pic_pending |= 1u << 2;                                      // VBlank

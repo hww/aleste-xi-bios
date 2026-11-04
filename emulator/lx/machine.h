@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <functional>
 #include <z80ex.h>
 #include "fdc765.h"
 
@@ -41,6 +42,13 @@ public:
     // Ejecuta hasta completar un cuadro de video (60 Hz). Devuelve false si
     // la CPU se ha parado (modo legacy no emulado todavia, etc.).
     bool run_frame();
+    // Una instruccion (o la aceptacion de una interrupcion), con el tiempo de
+    // los dispositivos; devuelve los ciclos
+    int  step();
+    // Depurador: se llama antes de cada instruccion; si devuelve true, la
+    // ejecucion se para ahi (run_frame vuelve con break_hit = true)
+    std::function<bool(uint16_t pc)> break_check;
+    bool break_hit = false;
 
     // Pantalla: SCREEN_W x SCREEN_H en ARGB8888
     const uint32_t* framebuffer() const { return fb.data(); }
@@ -64,6 +72,16 @@ public:
     std::string stop_reason;
 
     uint32_t translate(uint16_t addr) const;            // direccion de la CPU -> fisica
+    uint8_t  peek(uint16_t addr) const { uint32_t p = translate(addr); return p < 0xFF0000 ? mem[p] : 0xFF; }
+    // estado de la MMU para el depurador
+    bool     is_supervisor() const { return supervisor; }
+    uint8_t  mmu_ctrl() const { return mmu_control; }
+    uint8_t  mmio_pg() const { return mmu_page; }
+    uint8_t  super_slots() const { return slot_super; }
+    uint8_t  user_slots() const { return slot_user; }
+    const uint8_t* banks() const { return bank; }
+    uint16_t pic_pend() const { return pic_pending; }
+    uint16_t pic_msk() const { return pic_mask; }
 
     // Callbacks de z80ex
     uint8_t  mread(uint16_t addr, int m1);
@@ -138,6 +156,11 @@ private:
     std::deque<PS2Event> kq;
     bool     kq_ovf = false;
     uint8_t  kin_ctrl = 0;
+    uint8_t  kmatrix[11] = {};                          // filas del 520EX/CPC, 1 = pulsada
+public:
+    uint8_t  joy = 0;                                   // fila 9 (joystick), 1 = pulsado
+    const uint8_t* matrix() const { return kmatrix; }
+private:
 public:
     bool     layout_es = false;                         // opcion del OSD
 private:

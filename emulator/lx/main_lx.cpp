@@ -4,22 +4,30 @@
 //   alestelx [opciones] boot.rom
 //     -a imagen        disco en la unidad A (720 KB, MSX-DOS)
 //     -b imagen        disco en la unidad B
-//     --es             teclado espanol (como la opcion del OSD)
+//     --keyboard us|es teclado de EE. UU. (por defecto) o espanol, como la
+//                      opcion Keyboard del OSD (--es = --keyboard es)
 //     --scale N        ventana de 320N x 240N (3 por defecto)
+//   Depurador (consola en la terminal, ver debugger.h):
+//     --debug          arranca parado y con la consola
+//     --sym fichero    simbolos de un mapa de z88dk (se puede repetir)
+//     --break dir      punto de ruptura (direccion, simbolo o p:fisica)
 //   Sin ventana (pruebas, como el banco de pruebas del core):
 //     --headless --ms N          corre N ms de la maquina y sale
 //     --type MS:texto            teclea texto a los MS ms ('|' Enter, '~' Esc)
 //     --shot fichero.ppm         pantalla al final
 //     --pcm fichero              audio (estereo, 16 bits, 48 kHz)
 //     --save-a fichero           imagen del disco A al final
-// Teclas en la ventana: las del PC van a la maquina; F12 reset, F11 pantalla
-// completa.
+// Teclas en la ventana: las del PC van a la maquina (tambien a la matriz del
+// 520EX/CPC, para los juegos); F12 reset, Mayus+F12 cambia el teclado (se
+// aplica en el siguiente reset, como la opcion del OSD), F11 pantalla
+// completa, Pausa o Bloq Despl para y sigue (depurador).
 #include <SDL2/SDL.h>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 #include "machine.h"
+#include "debugger.h"
 
 using lx::Machine;
 
@@ -99,7 +107,8 @@ static void save_ppm(const Machine& m, const std::string& path) {
 
 int main(int argc, char** argv) {
     std::string rom, dska, dskb, shot, pcm, save_a;
-    bool headless = false, es = false;
+    bool headless = false, es = false, debug = false;
+    std::vector<std::string> syms, breaks;
     double run_ms = 0;
     int scale = 3;
     std::vector<TypeJob> jobs;
@@ -109,6 +118,10 @@ int main(int argc, char** argv) {
         if (a == "-a") dska = next();
         else if (a == "-b") dskb = next();
         else if (a == "--es") es = true;
+        else if (a == "--keyboard") { std::string k = next(); es = (k == "es" || k == "ES"); }
+        else if (a == "--debug") debug = true;
+        else if (a == "--sym") syms.push_back(next());
+        else if (a == "--break") breaks.push_back(next());
         else if (a == "--scale") scale = std::max(1, atoi(next().c_str()));
         else if (a == "--headless") headless = true;
         else if (a == "--ms") run_ms = atof(next().c_str());
@@ -124,7 +137,8 @@ int main(int argc, char** argv) {
         else { fprintf(stderr, "Unknown option %s\n", a.c_str()); return 1; }
     }
     if (rom.empty()) {
-        fprintf(stderr, "Usage: alestelx [-a disk] [-b disk] [--es] [--headless --ms N] boot.rom\n");
+        fprintf(stderr, "Usage: alestelx [-a disk] [-b disk] [--keyboard us|es] [--debug] [--sym file.map]\n"
+                        "                [--break addr] [--headless --ms N --type MS:text --shot file.ppm] boot.rom\n");
         return 1;
     }
 
@@ -134,6 +148,9 @@ int main(int argc, char** argv) {
     if (!dskb.empty() && !m.fdc.mount(1, dskb)) fprintf(stderr, "Cannot mount %s\n", dskb.c_str());
     m.layout_es = es;
     m.reset();
+    lx::Debugger dbg(m);
+    for (auto& f : syms) dbg.load_symbols(f);
+    for (auto& b : breaks) dbg.add_breakpoint(b);
 
     FILE* pcmf = pcm.empty() ? nullptr : fopen(pcm.c_str(), "wb");
 
@@ -178,7 +195,16 @@ int main(int argc, char** argv) {
     SDL_AudioDeviceID audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
     if (audio) SDL_PauseAudioDevice(audio, 0);
 
-    bool quit = false, full = false;
+    bool quit = false, full = false, console = false;
+    auto set_title = [&]() {
+        std::string t = std::string("Aleste LX - keyboard ") + (m.layout_es ? "ES" : "US") +
+                        (dbg.paused() ? " - PAUSED (debugger in the terminal)" : "");
+        SDL_SetWindowTitle(win, t.c_str());
+    };
+    if (debug || !breaks.empty()) { dbg.start_console(); console = true; }
+    if (debug) dbg.set_paused(true);
+    set_title();
+    bool was_paused = dbg.paused();
     uint32_t t0 = SDL_GetTicks();
     double frames = 0;
     while (!quit) {
@@ -187,7 +213,21 @@ int main(int argc, char** argv) {
             if (e.type == SDL_QUIT) quit = true;
             else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
                 bool down = e.type == SDL_KEYDOWN;
-                if (e.key.keysym.scancode == SDL_SCANCODE_F12) { if (down) m.reset(); continue; }
+                if (e.key.keysym.scancode == SDL_SCANCODE_F12) {
+                    if (down && (SDL_GetModState() & KMOD_SHIFT)) {
+                        m.layout_es = !m.layout_es;
+                        printf("Keyboard: %s (applies at the next reset, F12)\n", m.layout_es ? "Spanish" : "US");
+                        set_title();
+                    } else if (down) m.reset();
+                    continue;
+                }
+                if (e.key.keysym.scancode == SDL_SCANCODE_PAUSE || e.key.keysym.scancode == SDL_SCANCODE_SCROLLLOCK) {
+                    if (down) {
+                        if (!console) { dbg.start_console(); console = true; }
+                        dbg.set_paused(!dbg.paused());
+                    }
+                    continue;
+                }
                 if (e.key.keysym.scancode == SDL_SCANCODE_F11) {
                     if (down) { full = !full; SDL_SetWindowFullscreen(win, full ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); }
                     continue;
@@ -197,10 +237,13 @@ int main(int argc, char** argv) {
                 if (sdl_to_ps2(e.key.keysym.scancode, k)) m.key_event(k.code, down, k.ext);
             }
         }
-        if (!m.run_frame()) {
+        if (console) dbg.poll();
+        if (dbg.quit_requested()) break;
+        if (!dbg.paused() && !m.run_frame()) {
             static bool told = false;
             if (!told) { fprintf(stderr, "Stopped: %s\n", m.stop_reason.c_str()); told = true; }
         }
+        if (dbg.paused() != was_paused) { was_paused = dbg.paused(); set_title(); }
         if (audio) {
             auto& a = m.audio();
             if (SDL_GetQueuedAudioSize(audio) < (uint32_t)lx::AUDIO_RATE)   // menos de ~0,25 s en cola

@@ -12,8 +12,13 @@ modes), DMA/blitter, Magic Sound 2 (4 channels, 48 kHz), PS/2 keyboard (US or
 Spanish layout) and the uPD765 floppy controller with 720 KB MSX-DOS images
 (read and write, two drives). CPU: z80ex at 18 MHz, 60 Hz VBlank.
 
+The PC keyboard feeds both the PS/2 event queue the BIOS reads and the
+520EX/CPC key matrix that games read (ports 10h-1Ah of MMIO page 8). The
+matrix table is generated from the core's `kbd_520ex.sv` by
+`tools/gen_kbdmatrix.py`, so both always agree.
+
 Not yet: the 520EX/CPC legacy mode (the emulator stops when software switches
-to it), the keyboard matrix, IPC and the graphics accelerator.
+to it), joysticks, IPC and the graphics accelerator.
 
 ## Build
 
@@ -25,11 +30,43 @@ from `../deps/z80ex`.
 
 ## Use
 
-    alestelx [-a disk.dsk] [-b disk.dsk] [--es] [--scale N] boot.rom
+    alestelx [-a disk.dsk] [-b disk.dsk] [--keyboard us|es] [--scale N]
+             [--debug] [--sym file.map] [--break addr] boot.rom
 
 `boot.rom` is the same file as on the MiSTer SD (`games/AlesteLX/boot.rom`:
-LX.ROM, optionally followed by AL512.BIN). The PC keyboard goes to the
-machine; F12 resets, F11 toggles full screen.
+LX.ROM, optionally followed by AL512.BIN). `--keyboard` is the OSD Keyboard
+option (US by default); the BIOS reads it at boot, and `KEYB US|ES` changes it
+in LX-DOS.
+
+Keys in the window: the PC keyboard goes to the machine. F12 resets,
+Shift+F12 switches the keyboard layout (applies at the next reset, like the
+OSD option), F11 toggles full screen, Pause or Scroll Lock stops and resumes
+(debugger).
+
+## Debugger
+
+A console in the terminal the emulator was started from, so it never fights
+with the machine's keyboard. `--debug` starts paused; Pause/Scroll Lock in
+the window stops and resumes at any time. Symbols come from z88dk map files
+(`--sym lx/build/src/build/aleste.map` for the ROM, the LX-DOS map for the
+DOS, etc.).
+
+| Command | |
+|---|---|
+| `c` / `g [addr]` | continue (optionally until addr) |
+| `p` | pause |
+| `s [n]` | step n instructions |
+| `n` | step over CALL, RST, DJNZ, LDIR and the other block instructions |
+| `t [n]` | trace n instructions |
+| `r` | registers, MMU (supervisor/user, control, MMIO page, slots, banks) and PIC |
+| `d [addr] [n]` | disassemble, with symbols |
+| `m [addr] [n]` / `pm phys [n]` | memory as the CPU sees it / physical memory |
+| `b addr\|symbol\|p:phys` | breakpoint (logical, symbol or physical address) |
+| `bl`, `bc n\|all` | list and clear breakpoints |
+| `sym file.map` | load symbols |
+| `q` | quit |
+
+Addresses are hexadecimal (`C000`, `0xC000`, `$C000`) or symbol names.
 
 Headless mode, for automated tests (the same checks as the core testbench):
 
@@ -47,3 +84,5 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | boot ROM + LXDOS.DSK, `dir`, `hello one two` | boots LX-DOS, lists the disk, HELLO.COM prints its checks |
 | FILETEST.COM, MSXTEST.COM | all file, block, date/time and absolute-sector checks pass; the saved disk is a valid MSX-DOS image |
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
+| ZEXDOC.COM (whole run) | all 67 tests OK |
+| keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
