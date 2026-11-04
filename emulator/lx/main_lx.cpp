@@ -17,6 +17,8 @@
 //     --shot fichero.ppm         pantalla al final
 //     --pcm fichero              audio (estereo, 16 bits, 48 kHz)
 //     --save-a fichero           imagen del disco A al final
+// Mandos: el primero va a la fila 9 de la matriz (joystick del 520EX/CPC):
+// cruceta o stick izquierdo, A/Cruz fuego 1 y B/Circulo fuego 2.
 // Teclas en la ventana: las del PC van a la maquina (tambien a la matriz del
 // 520EX/CPC, para los juegos); F12 reset, Mayus+F12 cambia el teclado (se
 // aplica en el siguiente reset, como la opcion del OSD), F11 pantalla
@@ -89,6 +91,33 @@ static bool ascii_to_ps2(char ch, uint8_t& code, bool& shift) {
     if (const char* p = strchr(shd, ch); p && ch) { code = dcode[p - shd]; shift = true; return true; }
     for (auto& o : other) if (o.c == ch) { code = o.k; shift = o.s; return true; }
     return false;
+}
+
+// ---- Mandos -> fila 9 de la matriz: bit 0 arriba, 1 abajo, 2 izquierda,
+// 3 derecha, 4 fuego 2, 5 fuego 1 (como kbd_520ex.sv)
+static uint8_t read_joystick(SDL_GameController* gc, SDL_Joystick* js) {
+    uint8_t j = 0;
+    const int dz = 12000;
+    if (gc) {
+        int x = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX);
+        int y = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY);
+        if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_UP) || y < -dz)    j |= 0x01;
+        if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_DOWN) || y > dz)   j |= 0x02;
+        if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_LEFT) || x < -dz)  j |= 0x04;
+        if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || x > dz)  j |= 0x08;
+        if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B))                     j |= 0x10;
+        if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A))                     j |= 0x20;
+    } else if (js) {
+        int x = SDL_JoystickGetAxis(js, 0), y = SDL_JoystickGetAxis(js, 1);
+        uint8_t hat = SDL_JoystickNumHats(js) ? SDL_JoystickGetHat(js, 0) : 0;
+        if ((hat & SDL_HAT_UP) || y < -dz)    j |= 0x01;
+        if ((hat & SDL_HAT_DOWN) || y > dz)   j |= 0x02;
+        if ((hat & SDL_HAT_LEFT) || x < -dz)  j |= 0x04;
+        if ((hat & SDL_HAT_RIGHT) || x > dz)  j |= 0x08;
+        if (SDL_JoystickNumButtons(js) > 1 && SDL_JoystickGetButton(js, 1)) j |= 0x10;
+        if (SDL_JoystickNumButtons(js) > 0 && SDL_JoystickGetButton(js, 0)) j |= 0x20;
+    }
+    return j;
 }
 
 struct TypeJob { double ms; std::string text; size_t pos = 0; int phase = 0; double next = 0; };
@@ -183,7 +212,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     SDL_Window* win = SDL_CreateWindow("Aleste LX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                        320 * scale, 240 * scale, SDL_WINDOW_RESIZABLE);
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -195,6 +224,18 @@ int main(int argc, char** argv) {
     SDL_AudioDeviceID audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
     if (audio) SDL_PauseAudioDevice(audio, 0);
 
+    SDL_GameController* gc = nullptr;
+    SDL_Joystick* js = nullptr;
+    auto open_pad = [&]() {
+        if (gc || js) return;
+        for (int i = 0; i < SDL_NumJoysticks(); i++) {
+            if (SDL_IsGameController(i) && (gc = SDL_GameControllerOpen(i))) {
+                printf("Joystick: %s\n", SDL_GameControllerName(gc)); return;
+            }
+            if ((js = SDL_JoystickOpen(i))) { printf("Joystick: %s\n", SDL_JoystickName(js)); return; }
+        }
+    };
+    open_pad();
     bool quit = false, full = false, console = false;
     auto set_title = [&]() {
         std::string t = std::string("Aleste LX - keyboard ") + (m.layout_es ? "ES" : "US") +
@@ -211,6 +252,12 @@ int main(int argc, char** argv) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) quit = true;
+            else if (e.type == SDL_CONTROLLERDEVICEADDED || e.type == SDL_JOYDEVICEADDED) open_pad();
+            else if (e.type == SDL_CONTROLLERDEVICEREMOVED || e.type == SDL_JOYDEVICEREMOVED) {
+                if (gc) { SDL_GameControllerClose(gc); gc = nullptr; }
+                if (js) { SDL_JoystickClose(js); js = nullptr; }
+                open_pad();
+            }
             else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
                 bool down = e.type == SDL_KEYDOWN;
                 if (e.key.keysym.scancode == SDL_SCANCODE_F12) {
@@ -237,6 +284,7 @@ int main(int argc, char** argv) {
                 if (sdl_to_ps2(e.key.keysym.scancode, k)) m.key_event(k.code, down, k.ext);
             }
         }
+        m.joy = read_joystick(gc, js);
         if (console) dbg.poll();
         if (dbg.quit_requested()) break;
         if (!dbg.paused() && !m.run_frame()) {

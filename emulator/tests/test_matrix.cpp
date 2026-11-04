@@ -23,6 +23,10 @@ int main() {
     }
     // todo suelto al final
     for (int r = 0; r <= 10; r++) if (m.pread(0x10 + r) != 0xFF) { printf("FAIL fila %d queda %02X\n", r, m.pread(0x10 + r)); fails++; }
+    // joystick: fila 9 = teclas | joy (bit 0 arriba ... bit 5 fuego 1)
+    m.joy = 0x21;
+    if (m.pread(0x19) != (uint8_t)~0x21) { printf("FAIL joystick: fila 9 = %02X\n", m.pread(0x19)); fails++; }
+    m.joy = 0;
     // ejemplo: 'A' (1Ch)
     m.key_event(0x1C, true, false);
     printf("A pulsada: fila 8 = %02X\n", m.pread(0x18));
