@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 # Prueba del servidor GDB RSP de alestelx: habla el protocolo como GDB/DeZog.
-#   alestelx --headless --gdb 2159 boot.rom &   ;   python3 gdb_rsp_test.py 2159 [dir_main]
-import socket, sys, time
+#   alestelx --headless --gdb 2159 boot.rom &
+#   python3 gdb_rsp_test.py 2159 [bios.map | direccion_de_main]
+# La direccion de main cambia con cada compilacion de la ROM: mejor pasar el
+# mapa (bios.map en el paquete, lx/build/src/build/aleste.map en el repo).
+import os, re, socket, sys, time
 
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 2159
-main = int(sys.argv[2], 16) if len(sys.argv) > 2 else 0x43FD
+arg = sys.argv[2] if len(sys.argv) > 2 else 'bios.map'
+if os.path.exists(arg):
+    m = re.search(r'^_main\s*=\s*\$([0-9A-Fa-f]+)', open(arg).read(), re.M)
+    if not m: raise SystemExit('no _main in ' + arg)
+    main = int(m.group(1), 16)
+else:
+    main = int(arg, 16)
+print('main = %04X' % main)
 s = socket.create_connection(('127.0.0.1', port), timeout=10)
 buf = b''
 

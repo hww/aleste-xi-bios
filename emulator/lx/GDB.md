@@ -189,12 +189,12 @@ $ z80-unknown-elf-gdb
 (gdb) info registers
 (gdb) x/8xb 0                     # memoria de la CPU: DI, JP 0100h tras el reset
 (gdb) monitor pm C00000 32        # memoria fisica (sale en la terminal del emulador)
-(gdb) break *0x4AF3               # un punto de ruptura (aquí, main de la ROM)
+(gdb) break *0x4B4E               # un punto de ruptura (main de la ROM: grep _main bios.map)
 (gdb) continue
 (gdb) x/5i $pc                    # desensamblar
 (gdb) stepi
 (gdb) monitor hist 20             # salida en la terminal del emulador
-(gdb) set $pc = 0x4AF3            # cambiar un registro
+(gdb) set $hl = 0x1234            # cambiar un registro
 (gdb) set *(unsigned char*)0x0100 = 0     # escribir en la memoria de la CPU
 (gdb) continue                    # Ctrl-C para parar
 (gdb) detach                      # o kill
@@ -221,7 +221,7 @@ _main bios.map`, o `monitor sym bios.map` y luego `monitor d main`.
 
 ```sh
 ./alestelx-linux --headless --gdb 2159 -a LXDOS.DSK boot.rom &
-python3 gdb_rsp_test.py 2159 4AF3
+python3 gdb_rsp_test.py 2159 bios.map
 ```
 
 Recorre `qSupported`, `target.xml`, registros, memoria lógica y física, un
