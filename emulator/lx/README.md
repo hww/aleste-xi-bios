@@ -5,6 +5,10 @@ Emulator of the Aleste LX as implemented in the FPGA core
 Linux (SDL2). Every device follows the core's RTL register by register, so
 software that works here works on the FPGA and the other way round.
 
+Native video follows mc6845mod.sv: 1, 2, 4 and 8 bits per pixel, CPC-style
+or linear addressing (R20) and 2 to 16 bytes per character (R21); the
+320x200x256 mode (8 bpp linear) matches the core pixel for pixel.
+
 Emulated: 16 MB of physical memory, native MMU (slots, banks, E0h-FFh,
 supervisor/user, syscall, traps), PIC and system timer, MC146818 clock (PC
 time), palette and CRTC with the LX extended registers (linear 1/2/4 bpp
@@ -153,6 +157,7 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | FILETEST.COM, MSXTEST.COM | all file, block, date/time and absolute-sector checks pass; the saved disk is a valid MSX-DOS image |
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
 | ZEXDOC.COM (whole run) | all 67 tests OK |
+| GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
 | `520ex` from the ROM monitor | 520EX boot screen (high resolution, 16 colours, MAPMOD) |
 | `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program; `sound 1,284,100` gives 220.0 Hz on the left channel |

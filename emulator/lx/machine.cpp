@@ -537,33 +537,55 @@ uint32_t Machine::rgb12(uint16_t c) const {
     return 0xFF000000 | (r * 17 << 16) | (g * 17 << 8) | (b * 17);
 }
 
-// Modos lineales del CRTC del LX: R18 bits 1-0 = bits por pixel (00 1, 01 2,
-// 10 4), R19 = byte alto de la direccion, R12/R13 = inicio (en palabras),
-// R1 = bytes por linea / 2, R6 * (R9 + 1) = lineas
+// Video nativo, como mc6845mod.sv + pixel_pipeline.sv:
+//   R18 bits 1-0 = bits por pixel (00 1, 01 2, 10 4, 11 8)
+//   R20 bit 0 = direccion lineal (R19:R12:R13, en bytes, seguida de linea en
+//       linea); bit 1 paso de 4 bytes (si no, 2); bit 2 dos pasos por caracter
+//   R21 bits 1-0 = bytes por caracter: 00 2, 01 4, 10 8, 11 16
+//   cada caracter son 16 pixeles de la salida (720x480); cada linea del CRTC
+//   se ve dos veces. R1 = caracteres por linea, R6 * (R9 + 1) = lineas.
+//   Sin R20 bit 0, direcciones del CPC: R19, MA13-12, RA2-0, MA9-0, 0.
 void Machine::render() {
     if (legacy()) return;                                       // legacy: leg_fb, al acabar cada cuadro
     uint32_t bc = rgb12(border);
     std::fill(fb.begin(), fb.end(), bc);
-    int bpp_sel = crtc[0x12] & 3;
-    int bpp = bpp_sel == 0 ? 1 : bpp_sel == 1 ? 2 : 4;
-    uint32_t stride = crtc[1] * 2;
+    int bpp = 1 << (crtc[0x12] & 3);
+    int chars = crtc[1];
     int lines = crtc[6] * ((crtc[9] & 31) + 1);
-    if (!stride || !lines) return;
-    uint32_t base = ((uint32_t)crtc[0x13] << 16) + ((((crtc[12] & 0x3F) << 8) | crtc[13]) << 1);
-    int width = stride * 8 / bpp;
-    int sx = std::max(1, SCREEN_W / width);
-    int sy = std::max(1, SCREEN_H / std::max(1, lines));
-    int ox = (SCREEN_W - width * sx) / 2, oy = (SCREEN_H - lines * sy) / 2;
-    for (int y = 0; y < lines && y * sy < SCREEN_H; y++) {
-        const uint8_t* row = &mem[(base + y * stride) & 0xFFFFFF];
-        for (int x = 0; x < width; x++) {
-            int bit = x * bpp;
-            uint8_t byte = row[bit >> 3];
-            int idx = (byte >> (8 - bpp - (bit & 7))) & ((1 << bpp) - 1);
-            uint32_t c = rgb12(palette[idx]);
-            for (int yy = 0; yy < sy; yy++) {
-                uint32_t* p = &fb[(oy + y * sy + yy) * SCREEN_W + ox + x * sx];
-                for (int xx = 0; xx < sx; xx++) p[xx] = c;
+    if (!chars || !lines) return;
+    bool linear = crtc[0x14] & 1;
+    int bytes_char = 2 << (crtc[0x15] & 3);
+    int px_char = bytes_char * 8 / bpp;                         // pixeles por caracter
+    if (px_char > 16) px_char = 16;                             // el pipeline no da mas de 16
+    int width = chars * px_char;
+    // la salida: 16 pixeles por caracter en 640 (40 caracteres); lineas dobladas
+    double sx = 16.0 / px_char * (SCREEN_W / 640.0);
+    int sy = 2;
+    int out_w = (int)(width * sx), out_h = lines * sy;
+    int ox = (SCREEN_W - out_w) / 2, oy = (SCREEN_H - out_h) / 2;
+    uint32_t start = ((crtc[12] & 0x3F) << 8) | crtc[13];
+    uint32_t lin_step = linear ? (uint32_t)((crtc[0x14] & 4 ? 2 : 1) * (crtc[0x14] & 2 ? 4 : 2)) : 2;
+    for (int y = 0; y < lines; y++) {
+        int row = y / ((crtc[9] & 31) + 1), ra = y % ((crtc[9] & 31) + 1);
+        for (int c = 0; c < chars; c++) {
+            uint32_t a;
+            if (linear) a = ((uint32_t)crtc[0x13] << 16) + ((start + (uint32_t)(y * chars + c) * lin_step) & 0xFFFF);
+            else {
+                uint16_t ma = (uint16_t)(start + row * chars + c);
+                a = ((uint32_t)crtc[0x13] << 16) | (((ma >> 12) & 3) << 14) | ((ra & 7) << 11) | ((ma & 0x3FF) << 1);
+            }
+            for (int p = 0; p < px_char; p++) {
+                int bit = p * bpp;
+                uint8_t byte = mem[(a + (bit >> 3)) & 0xFFFFFF];
+                int idx = bpp == 8 ? byte : (byte >> (8 - bpp - (bit & 7))) & ((1 << bpp) - 1);
+                uint32_t col = rgb12(palette[idx]);
+                int x0 = ox + (int)((c * px_char + p) * sx), x1 = ox + (int)((c * px_char + p + 1) * sx);
+                for (int yy = 0; yy < sy; yy++) {
+                    int yo = oy + y * sy + yy;
+                    if (yo < 0 || yo >= SCREEN_H) continue;
+                    uint32_t* line = &fb[yo * SCREEN_W];
+                    for (int x = std::max(0, x0); x < std::min(SCREEN_W, x1); x++) line[x] = col;
+                }
             }
         }
     }
