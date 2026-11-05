@@ -1,136 +1,138 @@
-# Depurar el Aleste LX con GDB o DeZog (servidor GDB de alestelx)
+# Debugging the Aleste LX with GDB or DeZog (alestelx GDB server)
 
-`alestelx` lleva un servidor del **protocolo remoto de GDB** (RSP, *Remote
-Serial Protocol*): el mismo que usan `gdbserver`, OpenOCD o el *gdbstub* de
-MAME. Con él, un depurador externo controla la máquina emulada: la para, la
-hace avanzar instrucción a instrucción, pone puntos de ruptura y lee o escribe
-registros y memoria, mientras el emulador sigue mostrando la pantalla y
-sonando como siempre.
+*(Versión en español: `GDB.es.md`.)*
 
-Clientes posibles:
+`alestelx` includes a server for the **GDB remote protocol** (RSP, *Remote
+Serial Protocol*): the same one used by `gdbserver`, OpenOCD or MAME's
+*gdbstub*. With it, an external debugger controls the emulated machine: it
+stops it, steps it one instruction at a time, sets breakpoints and reads or
+writes registers and memory, while the emulator keeps showing the screen and
+playing sound as usual.
 
-- **DeZog** (extensión de VS Code para Z80): depuración visual con el código
-  fuente, registros, memoria, pila y desensamblado. Se conecta como a MAME.
-- **GDB** compilado con soporte de Z80, desde la línea de órdenes.
-- Cualquier herramienta que hable RSP (IDA, scripts propios...). En
-  `tests/gdb_rsp_test.py` hay un cliente mínimo en Python que sirve de
-  ejemplo y de prueba.
+Possible clients:
 
-## Arrancar el emulador con el servidor
+- **DeZog** (Z80 debugging extension for VS Code): visual debugging with the
+  source code, registers, memory, stack and disassembly. It connects as it
+  does to MAME.
+- **GDB** built with Z80 support, from the command line.
+- Any tool that speaks RSP (IDA, your own scripts...). `tests/gdb_rsp_test.py`
+  is a minimal Python client that works both as an example and as a test.
 
-Windows: `alestelx-gdb.bat`. Linux: `./alestelx-gdb.sh`. Los dos hacen:
+## Starting the emulator with the server
+
+Windows: `alestelx-gdb.bat`. Linux: `./alestelx-gdb.sh`. Both run:
 
     alestelx -a LXDOS.DSK --gdb 2159 boot.rom
 
-- `--gdb PUERTO` abre el servidor en `localhost:PUERTO` (2159 en los
-  lanzadores). Solo escucha en la propia máquina (127.0.0.1): no es
-  accesible desde la red.
-- La máquina **arranca parada**, en el reset (PC = 0000h), esperando a que
-  el depurador se conecte y le diga que siga. Es como MAME con `-debug
-  -debugger gdbstub`.
-- Al conectarse un depurador, la máquina se para; al desconectarse, sigue
-  sola. Se puede volver a conectar.
-- Se combina con el resto de opciones: discos, `--keyboard`, `--sym`,
-  `--debug` (la consola del depurador propio en la terminal, a la vez)...
+- `--gdb PORT` opens the server on `localhost:PORT` (2159 in the launchers).
+  It only listens on the local machine (127.0.0.1): it is not reachable from
+  the network.
+- The machine **starts stopped**, at reset (PC = 0000h), waiting for the
+  debugger to connect and tell it to go on, like MAME with `-debug -debugger
+  gdbstub`.
+- When a debugger connects, the machine stops; when it disconnects, the
+  machine runs on its own. You can connect again.
+- It combines with the other options: disks, `--keyboard`, `--sym`,
+  `--debug` (the built-in debugger console in the terminal, at the same
+  time)...
 
-Sin ventana, para pruebas automáticas:
+Without a window, for automated tests:
 
     alestelx --headless --gdb 2159 -a LXDOS.DSK boot.rom
 
-En este modo el emulador termina cuando el depurador se desconecta o lo
-mata (`kill`).
+In this mode the emulator exits when the debugger disconnects or kills it
+(`kill`).
 
-## Qué ofrece el servidor
+## What the server provides
 
-### Registros
+### Registers
 
-Doce registros de 16 bits, en el orden del *gdbstub* de MAME (que es el que
-espera DeZog), y descritos en el `target.xml` que el servidor envía, así que
-GDB los entiende sin configurar nada:
+Twelve 16-bit registers, in the order of MAME's *gdbstub* (the one DeZog
+expects), also described in the `target.xml` the server sends, so GDB
+understands them with no configuration:
 
-| n | registro | n | registro | n | registro |
+| n | register | n | register | n | register |
 |---|---|---|---|---|---|
 | 0 | AF | 4 | AF' | 8 | IX |
 | 1 | BC | 5 | BC' | 9 | IY |
 | 2 | DE | 6 | DE' | 10 | SP |
 | 3 | HL | 7 | HL' | 11 | PC |
 
-I, R y el modo de interrupción no van en esta lista: se ven con `monitor r`
-(ver más abajo).
+I, R and the interrupt mode are not in this list: `monitor r` shows them
+(see below).
 
-### Memoria: lógica y física
+### Memory: logical and physical
 
-El LX tiene 16 MB de memoria física y una MMU que pone bancos de 16 KB en las
-cuatro ventanas que ve la CPU. El servidor da acceso a las dos cosas:
+The LX has 16 MB of physical memory and an MMU that maps 16 KB banks into
+the four windows the CPU sees. The server gives access to both:
 
-| Dirección en el depurador | Qué es |
+| Address in the debugger | What it is |
 |---|---|
-| `0000`-`FFFF` | lo que ve la CPU ahora, a través de la MMU (en el modo 520EX, de su MMU) |
-| `10000` en adelante | memoria **física**: dirección − 10000h |
+| `0000`-`FFFF` | what the CPU sees now, through the MMU (in 520EX mode, through its MMU) |
+| `10000` and up | **physical** memory: address − 10000h |
 
-Ejemplos de memoria física:
+Physical memory examples:
 
-| En el depurador | Física | Qué hay |
+| In the debugger | Physical | What is there |
 |---|---|---|
-| `0xC10000` | C00000 | la ROM del LX (BIOS) |
-| `0xC50000` | C40000 | la VRAM del modo de texto |
-| `0xC60000` | C50000 | la VRAM de 320×200×256 |
+| `0xC10000` | C00000 | the LX ROM (BIOS) |
+| `0xC50000` | C40000 | the text mode VRAM |
+| `0xC60000` | C50000 | the 320×200×256 VRAM |
 | `0xC90000` | C80000 | LXDOS.SYS |
-| `0xCA0000` | C90000 | el programa .COM en ejecución (su 0000h) |
+| `0xCA0000` | C90000 | the running .COM program (its 0000h) |
 
-Lectura y escritura funcionan en las dos zonas (lecturas de hasta 2 KB por
-petición), para los clientes que envían la dirección completa, como el de
-prueba. **GDB para Z80 trabaja con direcciones de 16 bits** y puede recortar
-las de la zona física: con GDB, la memoria física se ve con `monitor pm`
-(ver más abajo).
+Reading and writing work in both areas (reads of up to 2 KB per request),
+for clients that send the full address, such as the test one. **GDB for Z80
+works with 16-bit addresses** and may truncate the physical ones: with GDB,
+look at physical memory with `monitor pm` (see below).
 
-### Puntos de ruptura
+### Breakpoints
 
-- De **ejecución**, por dirección de la CPU (los `break` normales de GDB y los
-  de DeZog). Saltan con cualquier banco puesto en esa ventana: un punto en
-  4000h para tanto en el código de la ROM como en el del LX-DOS si los dos
-  pasan por ahí.
-- Para parar solo en un banco concreto, con las órdenes del depurador propio
-  a través de `monitor`:
-  - `monitor b p:C86CED` — en esa dirección **física** exacta;
-  - `monitor b pg:322` — al ejecutar cualquier cosa de la página física
-    322h (16 KB: dirección física / 4000h; aquí C88000-C8BFFF, el banco 22h
-    del slot 3, la tercera ventana del LX-DOS).
-  - Cuando saltan, el depurador externo recibe la parada como una más.
-- Puntos de vigilancia de memoria (*watchpoints*): todavía no. GDB, si se le
-  pide uno, lo simula él solo avanzando paso a paso (lento, pero funciona).
+- **Execution** breakpoints, by CPU address (GDB's normal `break` and
+  DeZog's). They trigger whatever bank is mapped in that window: a
+  breakpoint at 4000h stops both in ROM code and in LX-DOS code if both go
+  through there.
+- To stop only in a specific bank, use the built-in debugger commands
+  through `monitor`:
+  - `monitor b p:C86CED` — at that exact **physical** address;
+  - `monitor b pg:322` — when anything in physical page 322h runs (16 KB:
+    physical address / 4000h; here C88000-C8BFFF, bank 22h of slot 3, the
+    third LX-DOS window).
+  - When they trigger, the external debugger gets the stop like any other.
+- Memory watchpoints: not yet. If you ask GDB for one, it emulates it by
+  single-stepping (slow, but it works).
 
 ### Control
 
 | | |
 |---|---|
-| continuar | `continue` (también desde una dirección) |
-| un paso | `stepi` (una instrucción, con sus prefijos) |
-| parar | Ctrl-C en GDB, o el botón de pausa de DeZog |
-| salir | `detach` (la máquina sigue) o `kill` (termina el emulador) |
+| continue | `continue` (also from a given address) |
+| one step | `stepi` (one instruction, with its prefixes) |
+| stop | Ctrl-C in GDB, or DeZog's pause button |
+| quit | `detach` (the machine keeps running) or `kill` (the emulator exits) |
 
-### `monitor`: las órdenes del depurador de alestelx
+### `monitor`: the alestelx debugger commands
 
-`monitor ORDEN` ejecuta cualquier orden del depurador propio. **Su salida sale
-en la terminal del emulador**, no en la del depurador. Las más útiles:
+`monitor COMMAND` runs any command of the built-in debugger. **Its output
+goes to the emulator's terminal**, not to the debugger's. The most useful:
 
 | | |
 |---|---|
-| `monitor r` | registros, I, R, IM, IFF, la MMU (supervisor, slots, bancos) y el PIC |
-| `monitor hist 40` | las 40 últimas instrucciones ejecutadas, desensambladas desde donde se ejecutaron |
-| `monitor d 4000 20` | desensamblar con símbolos |
-| `monitor pm C50000 64` | memoria física |
-| `monitor sym lxdos.map` | cargar símbolos de un mapa de z88dk |
-| `monitor b p:C86CED`, `monitor b pg:322` | puntos de ruptura físicos o por página física de 16 KB |
-| `monitor bl`, `monitor bc all` | listarlos y borrarlos |
-| `monitor disk a otro.dsk` | cambiar el disco |
+| `monitor r` | registers, I, R, IM, IFF, the MMU (supervisor, slots, banks) and the PIC |
+| `monitor hist 40` | the last 40 executed instructions, disassembled from where they ran |
+| `monitor d 4000 20` | disassemble with symbols |
+| `monitor pm C50000 64` | physical memory |
+| `monitor sym lxdos.map` | load symbols from a z88dk map file |
+| `monitor b p:C86CED`, `monitor b pg:322` | physical or physical-page breakpoints |
+| `monitor bl`, `monitor bc all` | list and clear them |
+| `monitor disk a other.dsk` | change the floppy |
 
-Ver `README.md` para la lista completa.
+See `README.md` for the full list.
 
-## Con DeZog (VS Code)
+## With DeZog (VS Code)
 
-DeZog se conecta al emulador igual que a MAME: tipo de conexión `mame`, en
-`localhost` y el puerto del emulador. Un `launch.json` de partida:
+DeZog connects to the emulator as it does to MAME: connection type `mame`,
+on `localhost` and the emulator's port. A starting `launch.json`:
 
 ```json
 {
@@ -149,90 +151,91 @@ DeZog se conecta al emulador igual que a MAME: tipo de conexión `mame`, en
 }
 ```
 
-1. Arranca el emulador con `alestelx-gdb.bat` / `alestelx-gdb.sh`.
-2. En VS Code, lanza la configuración "Aleste LX (alestelx)".
-3. Registros, memoria, desensamblado, puntos de ruptura (clic en el margen)
-   y pasos funcionan desde la interfaz de DeZog.
+1. Start the emulator with `alestelx-gdb.bat` / `alestelx-gdb.sh`.
+2. In VS Code, launch the "Aleste LX (alestelx)" configuration.
+3. Registers, memory, disassembly, breakpoints (click in the margin) and
+   steps work from DeZog's interface.
 
-Para depurar con el código fuente, DeZog lee los ficheros de listado de
-z88dk: añade a la configuración el apartado de listados de z88dk que indica
-la documentación de DeZog para tu versión, apuntando a los `.lis` y al `.map`
-de la compilación (`lx/build/src/build/aleste.map` para la ROM,
-`lx/build/dos/lxdos.map` para el LX-DOS). Recuerda que la ROM y el LX-DOS
-usan las mismas direcciones lógicas en bancos distintos: carga los listados
-del que vayas a depurar.
+For source-level debugging DeZog reads z88dk list files: add to the
+configuration the z88dk list file section described in the DeZog
+documentation for your version, pointing to the `.lis` files and the `.map`
+of the build (`lx/build/src/build/aleste.map` for the ROM,
+`lx/build/dos/lxdos.map` for LX-DOS). Remember that the ROM and LX-DOS use
+the same logical addresses in different banks: load the lists of the one you
+are debugging.
 
-> El servidor se ha probado con un cliente RSP propio (`tests/gdb_rsp_test.py`)
-> que sigue los pasos de GDB y DeZog; con DeZog en sí todavía no. Si algo no
-> encaja, la terminal del emulador muestra cada conexión y las órdenes
-> `monitor`.
+> The server has been tested with its own RSP client
+> (`tests/gdb_rsp_test.py`), which follows the same steps as GDB and DeZog;
+> not yet with DeZog itself. If something does not fit, the emulator's
+> terminal shows every connection and the `monitor` commands.
 
-## Con GDB
+## With GDB
 
-Hace falta un GDB con soporte de Z80 (existe desde GDB 11). El
-`gdb-multiarch` de Ubuntu y Debian **no** lo trae compilado ("Undefined item:
-z80"). Para compilarlo en Linux (o en WSL en Windows):
+You need a GDB with Z80 support (available since GDB 11). Ubuntu's and
+Debian's `gdb-multiarch` does **not** include it ("Undefined item: z80"). To
+build it on Linux (or in WSL on Windows):
 
 ```sh
 wget https://ftp.gnu.org/gnu/gdb/gdb-15.2.tar.xz
 tar xf gdb-15.2.tar.xz && cd gdb-15.2
 ./configure --target=z80-unknown-elf --prefix=$HOME/z80gdb --disable-sim
 make -j$(nproc) && make install
-export PATH=$HOME/z80gdb/bin:$PATH        # queda como z80-unknown-elf-gdb
+export PATH=$HOME/z80gdb/bin:$PATH        # installed as z80-unknown-elf-gdb
 ```
 
-Una sesión:
+A session:
 
 ```
 $ z80-unknown-elf-gdb
 (gdb) target remote :2159
 (gdb) info registers
-(gdb) x/8xb 0                     # memoria de la CPU: DI, JP 0100h tras el reset
-(gdb) monitor pm C00000 32        # memoria fisica (sale en la terminal del emulador)
-(gdb) break *0x4B4E               # un punto de ruptura (main de la ROM: grep _main bios.map)
+(gdb) x/8xb 0                     # CPU memory: DI, JP 0100h after reset
+(gdb) monitor pm C00000 32        # physical memory (shown in the emulator's terminal)
+(gdb) break *0x4B4E               # a breakpoint (the ROM's main: grep _main bios.map)
 (gdb) continue
-(gdb) x/5i $pc                    # desensamblar
+(gdb) x/5i $pc                    # disassemble
 (gdb) stepi
-(gdb) monitor hist 20             # salida en la terminal del emulador
-(gdb) set $hl = 0x1234            # cambiar un registro
-(gdb) set *(unsigned char*)0x0100 = 0     # escribir en la memoria de la CPU
-(gdb) continue                    # Ctrl-C para parar
-(gdb) detach                      # o kill
+(gdb) monitor hist 20             # output in the emulator's terminal
+(gdb) set $hl = 0x1234            # change a register
+(gdb) set *(unsigned char*)0x0100 = 0     # write to CPU memory
+(gdb) continue                    # Ctrl-C to stop
+(gdb) detach                      # or kill
 ```
 
-Las direcciones de las funciones salen de los mapas de z88dk (`aleste.map`,
-`lxdos.map`, que van en el paquete como `bios.map` y `lxdos.map`): `grep
-_main bios.map`, o `monitor sym bios.map` y luego `monitor d main`.
+Function addresses come from the z88dk map files (`aleste.map`,
+`lxdos.map`, shipped in the package as `bios.map` and `lxdos.map`): `grep
+_main bios.map`, or `monitor sym bios.map` and then `monitor d main`. They
+change with every ROM build.
 
-## Problemas frecuentes
+## Common problems
 
-- **No conecta:** el puerto está ocupado por otro programa (prueba otro con
-  `--gdb 2160`), o el emulador no se arrancó con `--gdb`. Solo acepta
-  conexiones de la misma máquina.
-- **Se para "solo" al arrancar:** es lo esperado, espera al depurador. Pulsa
-  continuar.
-- **Un punto de ruptura salta donde no esperabas:** son por dirección
-  lógica; usa `monitor b p:...` para una dirección física concreta.
-- **La máquina se cuelga en C000h (`_undefined_method`):** la ROM y el
-  LXDOS.SYS no son de la misma compilación; las ROM nuevas lo detectan y
-  avisan al arrancar.
+- **It does not connect:** the port is used by another program (try another
+  one with `--gdb 2160`), or the emulator was not started with `--gdb`. It
+  only accepts connections from the same machine.
+- **It stops "by itself" at startup:** that is expected, it waits for the
+  debugger. Press continue.
+- **A breakpoint triggers where you did not expect:** they are by logical
+  address; use `monitor b p:...` for a specific physical address.
+- **The machine hangs at C000h (`_undefined_method`):** the ROM and
+  LXDOS.SYS are not from the same build; newer ROMs detect it and say so at
+  boot.
 
-## Probar el servidor
+## Testing the server
 
 ```sh
 ./alestelx-linux --headless --gdb 2159 -a LXDOS.DSK boot.rom &
 python3 gdb_rsp_test.py 2159 bios.map
 ```
 
-Recorre `qSupported`, `target.xml`, registros, memoria lógica y física, un
-punto de ruptura en `main` con `continue`, un paso, `monitor`, Ctrl-C y
-`kill`.
+It goes through `qSupported`, `target.xml`, registers, logical and physical
+memory, a breakpoint at `main` (taken from the map) with `continue`, a step,
+`monitor`, Ctrl-C and `kill`.
 
-## Paquetes que entiende el servidor (para quien escriba un cliente)
+## Packets the server understands (for client writers)
 
-`?`, `g`, `G`, `p`, `P`, `m`, `M`, `c [dir]`, `s [dir]`, `vCont?`,
-`vCont;c|C|s|S|t`, `Z0`/`Z1` y `z0`/`z1`, `D`, `k`, `vKill`, `H`, `T`,
+`?`, `g`, `G`, `p`, `P`, `m`, `M`, `c [addr]`, `s [addr]`, `vCont?`,
+`vCont;c|C|s|S|t`, `Z0`/`Z1` and `z0`/`z1`, `D`, `k`, `vKill`, `H`, `T`,
 `qSupported`, `qXfer:features:read:target.xml`, `qAttached`, `qC`,
 `qfThreadInfo`, `qsThreadInfo`, `qOffsets`, `qSymbol`, `qRcmd` (monitor),
-`QStartNoAckMode` y el byte 03h (Ctrl-C). Paradas: `S05` (punto de ruptura o
-paso) y `S02` (interrupción).
+`QStartNoAckMode` and the 03h byte (Ctrl-C). Stops: `S05` (breakpoint or
+step) and `S02` (interrupt).

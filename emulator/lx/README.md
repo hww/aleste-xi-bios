@@ -175,7 +175,7 @@ debugger kills it or disconnects).
   `monitor <command>` runs any alestelx debugger command (`hist`, `pm`, `b
   pg:NN`, ...) with its output in the emulator's terminal.
 
-A full guide (in Spanish), with DeZog and GDB examples: `lx/GDB.md`.
+A full guide, with DeZog and GDB examples: `lx/GDB.md` (Spanish: `lx/GDB.es.md`).
 `tests/gdb_rsp_test.py` talks the protocol like GDB does (registers, logical
 and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
 
