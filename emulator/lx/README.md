@@ -73,6 +73,15 @@ tape loading.
 
 Not yet in native mode: IPC and the graphics accelerator.
 
+## Launchers
+
+`launchers/` has ready-made scripts for each use, as `.bat` (Windows) and
+`.sh` (Linux): `alestelx` (US keyboard), `alestelx-es`, `alestelx-debug`,
+`alestelx-gdb`, `alestelx-520ex-basic`, `alestelx-520ex-msxdos`,
+`alestelx-520ex-mag` and `alestelx-520ex-tape`. They expect the emulator,
+`boot.rom` and the disk images in the same folder; extra arguments are passed
+on. On Linux the binary needs SDL2 (`sudo apt install libsdl2-2.0-0`).
+
 ## Build
 
     cmake -S . -B build && cmake --build build
@@ -166,6 +175,7 @@ debugger kills it or disconnects).
   `monitor <command>` runs any alestelx debugger command (`hist`, `pm`, `b
   pg:NN`, ...) with its output in the emulator's terminal.
 
+A full guide (in Spanish), with DeZog and GDB examples: `lx/GDB.md`.
 `tests/gdb_rsp_test.py` talks the protocol like GDB does (registers, logical
 and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
 

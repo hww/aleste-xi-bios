@@ -481,6 +481,7 @@ int main(int argc, char** argv) {
         }
         m.joy = read_joystick(gc, js);
         if (!dbg.paused()) { do_typing(emu_ms); emu_ms += 1000.0 / 60.0; }
+        if (run_ms > 0 && emu_ms >= run_ms) break;           // --ms tambien con ventana (pruebas)
         if (console) dbg.poll();
         if (gdb_port) { gdb.poll(); if (gdb.kill_requested()) break; }
         if (dbg.quit_requested()) break;
@@ -512,6 +513,7 @@ int main(int argc, char** argv) {
         if (wait > 0) SDL_Delay(wait);
         else if (wait < -500) { t0 = SDL_GetTicks(); frames = 0; }
     }
+    if (!shot.empty()) { m.render(); save_ppm(m, shot); }
     if (audio) SDL_CloseAudioDevice(audio);
     m.fdc.flush_all();
     if (m.cmos_dirty) m.save_cmos(cmos);
