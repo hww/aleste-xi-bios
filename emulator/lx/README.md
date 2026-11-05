@@ -1,4 +1,6 @@
-# alestelx — Aleste LX emulator (native mode)
+# alestelx — Aleste LX emulator
+
+User guide: `USAGE.md` (Spanish: `USAGE.es.md`). GDB / DeZog: `GDB.md` (`GDB.es.md`).
 
 Emulator of the Aleste LX as implemented in the FPGA core
 [AlesteLX_MiSTer](https://github.com/shaeon/AlesteLX_MiSTer), for Windows and
