@@ -158,6 +158,7 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
+| VIEW.COM and TUNNEL.COM on LXDOS.DSK (LX-DOS graphics, AlesteLX_MiSTer) | the four sample .LXI images; the tunnel with its rotating palette |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
 | `520ex` from the ROM monitor | 520EX boot screen (high resolution, 16 colours, MAPMOD) |
 | `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program; `sound 1,284,100` gives 220.0 Hz on the left channel |
