@@ -46,6 +46,10 @@ public:
     bool add_breakpoint(const std::string& spec);
     bool check(uint16_t pc);                    // enganche de Machine::break_check
     void run_command(const std::string& line) { exec(line); }
+    // para el servidor GDB
+    void step_quiet();
+    void add_bp(uint16_t a) { bps.insert(a); }
+    void remove_bp(uint16_t a) { bps.erase(a); }
     // disk a|b fichero, eject a|b: lo hace el programa principal (fichero "" = expulsar)
     std::function<void(int, const std::string&)> disk_hook;
 

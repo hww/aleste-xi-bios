@@ -20,11 +20,11 @@ target_include_directories(z80ex PUBLIC ${Z80EX}/include ${Z80EX})
 target_compile_definitions(z80ex PRIVATE WORDS_LITTLE_ENDIAN Z80EX_VERSION_STR=1.1.21 Z80EX_API_REVISION=1
                            Z80EX_VERSION_MAJOR=1 Z80EX_VERSION_MINOR=21 Z80EX_RELEASE_TYPE=)
 
-add_executable(alestelx lx/main_lx.cpp lx/machine.cpp lx/legacy.cpp lx/fdc765.cpp lx/tape.cpp lx/debugger.cpp)
+add_executable(alestelx lx/main_lx.cpp lx/machine.cpp lx/legacy.cpp lx/fdc765.cpp lx/tape.cpp lx/debugger.cpp lx/gdbserver.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(alestelx PRIVATE Threads::Threads)
 if(WIN32)
-  target_link_libraries(alestelx PRIVATE comdlg32)    # dialogo de ficheros
+  target_link_libraries(alestelx PRIVATE comdlg32 ws2_32)    # dialogo de ficheros, sockets
 endif()
 target_link_libraries(alestelx PRIVATE z80ex)
 if(TARGET SDL2::SDL2)

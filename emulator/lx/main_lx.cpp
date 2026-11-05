@@ -18,6 +18,8 @@
 //     --debug          arranca parado y con la consola
 //     --sym fichero    simbolos de un mapa de z88dk (se puede repetir)
 //     --break dir      punto de ruptura (direccion, simbolo o p:fisica)
+//     --gdb puerto     servidor del protocolo remoto de GDB (gdb-multiarch,
+//                      DeZog): arranca parado hasta que GDB siga
 //   Sin ventana (pruebas, como el banco de pruebas del core):
 //     --headless --ms N          corre N ms de la maquina y sale
 //     --type MS:texto            teclea texto a los MS ms ('|' Enter, '~' Esc)
@@ -49,6 +51,9 @@
 #include <vector>
 #include "machine.h"
 #include "debugger.h"
+#include "gdbserver.h"
+#include <thread>
+#include <chrono>
 #ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
@@ -200,6 +205,7 @@ static void save_ppm(const Machine& m, const std::string& path) {
 int main(int argc, char** argv) {
     std::string rom, dska, dskb, shot, pcm, save_a, cmos, tapef;
     bool cpc_mouse = false, amx_mouse = false;
+    int gdb_port = 0;
     bool headless = false, es = false, debug = false, boot_amstrad = false;
     std::vector<std::string> syms, breaks;
     double run_ms = 0;
@@ -218,6 +224,7 @@ int main(int argc, char** argv) {
         else if (a == "--debug") debug = true;
         else if (a == "--cmos") cmos = next();
         else if (a == "--tape") tapef = next();
+        else if (a == "--gdb") gdb_port = atoi(next().c_str());
         else if (a == "--cpc-mouse") cpc_mouse = true;
         else if (a == "--amx-mouse") amx_mouse = true;
         else if (a == "--boot") { std::string b = next(); boot_amstrad = (b == "amstrad"); }
@@ -271,6 +278,9 @@ int main(int argc, char** argv) {
     lx::Debugger dbg(m);
     for (auto& f : syms) dbg.load_symbols(f);
     for (auto& b : breaks) dbg.add_breakpoint(b);
+    lx::GdbServer gdb(m, dbg);
+    if (gdb_port && !gdb.listen(gdb_port)) { fprintf(stderr, "GDB: cannot listen on port %d\n", gdb_port); return 1; }
+    if (gdb_port) dbg.set_paused(true);                          // como MAME -debug: espera a GDB
 
     FILE* pcmf = pcm.empty() ? nullptr : fopen(pcm.c_str(), "wb");
 
@@ -286,6 +296,17 @@ int main(int argc, char** argv) {
         }
     };
 
+    if (headless && gdb_port) {
+        // sin ventana con GDB: corre mientras GDB no la pare, hasta que la mate
+        while (!gdb.kill_requested()) {
+            gdb.poll();
+            if (dbg.paused()) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); continue; }
+            if (!m.run_frame()) break;
+            m.audio().clear();
+        }
+        m.fdc.flush_all();
+        return 0;
+    }
     if (headless) {
         double ms = 0;
         while (ms < run_ms) {
@@ -461,6 +482,7 @@ int main(int argc, char** argv) {
         m.joy = read_joystick(gc, js);
         if (!dbg.paused()) { do_typing(emu_ms); emu_ms += 1000.0 / 60.0; }
         if (console) dbg.poll();
+        if (gdb_port) { gdb.poll(); if (gdb.kill_requested()) break; }
         if (dbg.quit_requested()) break;
         if (!dbg.paused() && !m.run_frame()) {
             static bool told = false;

@@ -194,6 +194,11 @@ void Debugger::step_n(int n, bool trace) {
     if (!trace || n == 0) { show_regs(); show_disasm(z80ex_get_reg(m.cpu, regPC), 1); }
 }
 
+void Debugger::step_quiet() {
+    pause = true;
+    do { m.step(); } while (z80ex_last_op_type(m.cpu));
+}
+
 // CALL, RST, DJNZ y las de bloque: hasta la instruccion siguiente
 void Debugger::step_over() {
     uint16_t pc = z80ex_get_reg(m.cpu, regPC);

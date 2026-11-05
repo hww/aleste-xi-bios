@@ -85,7 +85,7 @@ from `../deps/z80ex`.
 
     alestelx [-a disk.dsk] [-b disk.dsk] [--keyboard us|es] [--scale N]
              [--debug] [--sym file.map] [--break addr] [--boot amstrad]
-             [--cmos file] [--tape file] [--cpc-mouse] [--amx-mouse] boot.rom
+             [--cmos file] [--tape file] [--cpc-mouse] [--amx-mouse] [--gdb port] boot.rom
 
 `boot.rom` is the same file as on the MiSTer SD (`games/AlesteLX/boot.rom`:
 LX.ROM, optionally followed by AL512.BIN). `--keyboard` is the OSD Keyboard
@@ -149,6 +149,26 @@ Enter, `~` Esc), `--mouse MS:dx,dy,buttons` moves the mouse,
 breakpoint, the run stops there and prints the history), `--shot` saves the screen (PPM), `--pcm` the Magic Sound 2
 output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 
+## GDB remote protocol (gdb-multiarch, DeZog)
+
+`--gdb PORT` starts a GDB RSP server on localhost (the machine stays paused
+until the debugger continues, like MAME's `-debug -debugger gdbstub`). It
+works with the window and headless (`--headless --gdb 2159`: runs until the
+debugger kills it or disconnects).
+
+- Registers in MAME's order (AF BC DE HL AF' BC' DE' HL' IX IY SP PC), also
+  described in the `target.xml` the server sends, so DeZog (VS Code) can use
+  its MAME connection and a Z80-enabled GDB reads the layout from the XML.
+- Memory: 0000-FFFF is what the CPU sees through the MMU; from 10000h on it
+  is physical memory (address - 10000h), e.g. `0xC60000` = physical C50000,
+  the 8 bpp VRAM.
+- Execution breakpoints (Z0/Z1), continue, step, Ctrl-C, kill, detach;
+  `monitor <command>` runs any alestelx debugger command (`hist`, `pm`, `b
+  pg:NN`, ...) with its output in the emulator's terminal.
+
+`tests/gdb_rsp_test.py` talks the protocol like GDB does (registers, logical
+and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
+
 ## Validation (same results as the core in simulation)
 
 | Test | Result |
@@ -159,6 +179,7 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
 | VIEW.COM and TUNNEL.COM on LXDOS.DSK (LX-DOS graphics, AlesteLX_MiSTer) | the four sample .LXI images; the tunnel with its rotating palette |
+| GDB server (`tests/gdb_rsp_test.py`) | target.xml, registers, memory (logical and physical), breakpoint at `_main`, continue, step, monitor, Ctrl-C and kill |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
 | `520ex` from the ROM monitor | 520EX boot screen (high resolution, 16 colours, MAPMOD) |
 | `520ex` with `--boot amstrad` | CPC BASIC 1.1 ("Aleste 520EX Personal computer"), typing and running a program; `sound 1,284,100` gives 220.0 Hz on the left channel |
