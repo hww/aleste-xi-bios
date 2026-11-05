@@ -5,6 +5,7 @@
 //   MMU legacy            rtl/core/mmu_legacy.sv
 //   video (CRTC + GA)     rtl/core/cpc/cpc_video.sv (UM6845R tipo 0, GA40010)
 //   E/S, PPI, AY, IRQ     rtl/core/aleste_lx_core.sv
+//   cinta                 PB7 = senal, PC4 = motor (tape.cpp)
 // La CPU va a 4 MHz; el CRTC avanza un caracter por microsegundo (0,6 us en
 // la alta resolucion del 520EX, FABF D1).
 #include "machine.h"
@@ -34,6 +35,74 @@ void Machine::leg_reset() {
     leg_fb.assign(LEG_W * LEG_H, 0xFF000000);
     beam_x = beam_y = 0; beam_t = 0;
     ms = MagicSound();
+    mouse = Mice();
+}
+
+// ---------------------------------------------------------------- ratones
+void Machine::mouse_packet(int dx, int dy, uint8_t b) {
+    mouse.buttons = b & 7;
+    // serie: se acumula solo con el receptor del 8251 activado
+    if (mouse.cmd & 4) { mouse.acc_x += dx; mouse.acc_y += dy; }
+    // Kempston y AMX acumulan; SYMBiFACE II y Multiplay dan el ultimo paquete
+    mouse.kx = (mouse.kx + dx) & 0xFFF;
+    mouse.ky = (mouse.ky + dy) & 0xFFF;
+    mouse.amx_dx += dx; mouse.amx_dy += dy;
+    mouse.last_dx = dx; mouse.last_dy = dy;
+    mouse.sf2_avail = (dy ? 4 : 0) | (dx ? 2 : 0) | 1;
+    mouse.mp_avail = 3;
+}
+
+// 8251 (K580VV51): EExx datos, EFxx control / estado
+uint8_t Machine::serial_read(bool a8) {
+    if (a8) return 0x80 | (mouse.overrun ? 0x10 : 0) | 0x04 | (mouse.rx_rdy ? 0x02 : 0) | 0x01;  // DSR, TxEMPTY, RxRDY, TxRDY
+    mouse.rx_rdy = false;
+    return mouse.rx_data;
+}
+
+void Machine::serial_write(bool a8, uint8_t v) {
+    if (!a8) return;
+    if (v == 0x40) { mouse.expect_mode = true; mouse.cmd = 0; mouse.rx_rdy = false; return; }   // reset interno
+    if (mouse.expect_mode) { mouse.expect_mode = false; return; }                               // palabra de modo
+    mouse.cmd = v;
+    if (v & 0x10) mouse.overrun = false;                                                         // ER
+    if (v & 0x40) { mouse.expect_mode = true; mouse.cmd = 0; mouse.rx_rdy = false; }             // IR
+}
+
+// Raton Mouse Systems a 1200 baudios: un byte cada 8,33 ms (10 bits); paquete
+// 10000LMR (activos a 0), dx, dy, 0, 0
+void Machine::serial_time(int t) {
+    auto sat = [](int v) { return v > 127 ? 127 : v < -127 ? -127 : v; };
+    const double byte_cycles = 4e6 / 120;
+    if (mouse.tick > 0) { mouse.tick -= t; return; }
+    if (mouse.pkt_idx < 5) {
+        if (mouse.rx_rdy) mouse.overrun = true;
+        mouse.rx_data = mouse.pkt[mouse.pkt_idx++];
+        mouse.rx_rdy = true;
+        mouse.tick = byte_cycles;
+        return;
+    }
+    if (!(mouse.cmd & 4)) { mouse.acc_x = mouse.acc_y = 0; return; }
+    uint8_t nb = ((mouse.buttons & 1) << 2) | ((mouse.buttons & 4) >> 1) | ((mouse.buttons & 2) >> 1);   // L, M, R
+    if (mouse.acc_x || mouse.acc_y || nb != mouse.btn_sent) {
+        int dx = sat(mouse.acc_x), dy = sat(mouse.acc_y);
+        mouse.pkt[0] = 0x80 | (~nb & 7);
+        mouse.pkt[1] = (uint8_t)dx; mouse.pkt[2] = (uint8_t)dy; mouse.pkt[3] = 0; mouse.pkt[4] = 0;
+        mouse.acc_x -= dx; mouse.acc_y -= dy;
+        mouse.btn_sent = nb;
+        mouse.pkt_idx = 0;
+    }
+}
+
+// AMX por la fila 9 (joystick): un paso de 4 unidades por lectura
+uint8_t Machine::amx_read() {
+    uint8_t d = ((mouse.buttons & 4) ? 0x40 : 0) | ((mouse.buttons & 1) ? 0x20 : 0) | ((mouse.buttons & 2) ? 0x10 : 0);
+    if (mouse.amx_dx <= -4)     { d |= 0x02; mouse.amx_dx += 4; }    // como amx_mouse.v
+    else if (mouse.amx_dx >= 4) { d |= 0x01; mouse.amx_dx -= 4; }
+    else mouse.amx_dx = 0;
+    if (mouse.amx_dy <= -4)     { d |= 0x04; mouse.amx_dy += 4; }
+    else if (mouse.amx_dy >= 4) { d |= 0x08; mouse.amx_dy -= 4; }
+    else mouse.amx_dy = 0;
+    return d;
 }
 
 // ---------------------------------------------------------------- MagicSound
@@ -172,6 +241,11 @@ uint8_t Machine::leg_pread(uint16_t port) {
                         int row = ppi_c & 15;
                         uint8_t k = row <= 10 ? kmatrix[row] : 0;
                         if (row == 9) k |= joy;
+                        if (row == 9 && amx_mouse) {                // AMX: un paso al empezar a leer la fila
+                            if (!mouse.amx_sel) mouse.amx_data = amx_read();
+                            k |= mouse.amx_data;
+                        }
+                        mouse.amx_sel = (row == 9);
                         if (row == 2 && kfshift) k |= 0x20;
                         // como el core: SHIFT 2,5 s al arrancar el 520EX (modo
                         // AMSTRAD) si se pide, hasta que se pulse otra tecla
@@ -183,15 +257,38 @@ uint8_t Machine::leg_pread(uint16_t port) {
             } else v &= ppi_a;
             break;
         case 1:                                                 // B: cinta, /EXP, 50 Hz, marca, DISKINT, VSYNC
-            v &= (0 << 7) | (1 << 4) | (3 << 2) | (fdc.irq() ? 2 : 0) | (crt_vs ? 1 : 0);
+            v &= (tape.level_now() ? 0x80 : 0) | (1 << 4) | (3 << 2) | (fdc.irq() ? 2 : 0) | (crt_vs ? 1 : 0);
             break;
         case 2: v &= ppi_c; break;
         default: v &= 0xFF;
         }
     }
     if (ms_port(port)) v &= ms_read(port);
-    // 8251 en reposo (EExx datos, EFxx estado 85h: lo lee la BIOS de MSX-DOS)
-    if ((port >> 9) == 0x77) v &= (port & 0x100) ? 0x85 : 0x00;
+    // 8251 con el raton serie (EExx datos, EFxx estado)
+    if ((port >> 9) == 0x77) v &= serial_read(port & 0x100);
+    // ratones de CPC
+    if (cpc_mouse) {
+        if ((port >> 9) == 0x7D && (port & 0x80) && !(port & 0x10)) {          // Kempston
+            if (port & 0x100) v &= (port & 1) ? (mouse.ky & 0xFF) : (mouse.kx & 0xFF);
+            else v &= ~((((mouse.buttons >> 2) & 1) << 2) | ((mouse.buttons & 1) << 1) | ((mouse.buttons >> 1) & 1)) | 0xF8;
+        }
+        if (port == 0xFD10) {                                                   // SYMBiFACE II
+            auto c6 = [](int d) { return (uint8_t)((d > 31 ? 31 : d < -32 ? -32 : d) & 0x3F); };
+            if (mouse.sf2_avail & 4)      { mouse.sf2_avail &= ~4; v &= 0x80 | c6(mouse.last_dy); }
+            else if (mouse.sf2_avail & 2) { mouse.sf2_avail &= ~2; v &= 0x40 | c6(mouse.last_dx); }
+            else if (mouse.sf2_avail & 1) { mouse.sf2_avail &= ~1; v &= 0xC0 | (mouse.buttons & 7); }
+            else v &= 0;
+        }
+        if ((port >> 4) == 0xF99 && !(port & 8)) {                              // Multiplay
+            auto c4 = [](int d) { return (uint8_t)(d > 7 ? 7 : d < -8 ? -8 : d); };
+            switch (port & 7) {
+            case 0: v &= (mouse.buttons & 7) << 4; break;
+            case 2: v &= (mouse.mp_avail & 1) ? c4(mouse.last_dx) : 0; mouse.mp_avail &= ~1; break;
+            case 3: v &= (mouse.mp_avail & 2) ? c4(-mouse.last_dy) : 0; mouse.mp_avail &= ~2; break;
+            default: break;
+            }
+        }
+    }
     // disquetera: FB7E estado, FB7F datos
     if (!(port & 0x0400) && (port & 0x0100) && !(port & 0x0080))
         v &= (port & 1) ? fdc.read_data() : fdc.read_status();
@@ -259,6 +356,7 @@ void Machine::leg_pwrite(uint16_t port, uint8_t v) {
         }
     }
     if (ms_port(port)) ms_write(port, v);
+    if ((port >> 9) == 0x77) serial_write(port & 0x100, v);
     // FABx (A7 = 1, A5 = 1): EXTEND PORT del 520EX
     if ((port >> 8) == 0xFA && (port & 0x80) && (port & 0x20)) extport = v;
     // disquetera: FB7F datos, FA7E motor

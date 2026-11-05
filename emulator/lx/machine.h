@@ -18,6 +18,7 @@
 #include <functional>
 #include <z80ex.h>
 #include "fdc765.h"
+#include "tape.h"
 
 namespace lx {
 
@@ -65,8 +66,10 @@ public:
     // Teclado
     void key_event(uint8_t code, bool pressed, bool extended);
 
-    // Disquetera
+    // Disquetera y cinta
     Fdc765 fdc;
+    Tape   tape;
+    bool   tape_motor() const { return legacy() && (ppi_c & 0x10); }
 
     // Estado para el depurador y las pruebas
     Z80EX_CONTEXT* cpu = nullptr;
@@ -183,6 +186,10 @@ private:
 public:
     bool     layout_es = false;                         // opcion del OSD
     bool     boot_shift = false;                        // SHIFT al entrar en el 520EX: modo AMSTRAD
+    bool     cpc_mouse = false, amx_mouse = false;      // opciones del OSD
+    // Un paquete del raton del PC (PS/2: dy positivo hacia arriba; botones
+    // bit 0 izquierdo, 1 derecho, 2 central)
+    void     mouse_packet(int dx, int dy, uint8_t buttons);
     uint64_t leg_since = 0;                             // ciclos desde la entrada en modo legacy
     bool     leg_key = false;                           // se ha pulsado una tecla desde entonces
     bool     was_legacy = false;
@@ -237,6 +244,28 @@ private:
     void     ms_write(uint16_t port, uint8_t v);
     void     ms_time(int tstates);
     void     ms_dma(int ch);
+
+    // Ratones (como el core): serie del 520EX en el 8251 (Mouse Systems, la
+    // BIOS de MSX-DOS), y los de CPC: Kempston, SYMBiFACE II, Multiplay, AMX
+    struct Mice {
+        // 8251 + raton serie
+        bool     expect_mode = true, rx_rdy = false, overrun = false;
+        uint8_t  cmd = 0, rx_data = 0, pkt[5] = {}, btn_sent = 0;
+        int      pkt_idx = 5, acc_x = 0, acc_y = 0;
+        double   tick = 0;
+        // CPC
+        uint16_t kx = 128, ky = 0;                      // Kempston (12 bits)
+        int      last_dx = 0, last_dy = 0;              // el ultimo paquete PS/2
+        uint8_t  sf2_avail = 0, mp_avail = 0;
+        int      amx_dx = 0, amx_dy = 0;
+        uint8_t  amx_data = 0;
+        bool     amx_sel = false;
+        uint8_t  buttons = 0;                           // PS/2: bit 0 izq., 1 der., 2 central
+    } mouse;
+    uint8_t  serial_read(bool a8);
+    void     serial_write(bool a8, uint8_t v);
+    void     serial_time(int tstates);
+    uint8_t  amx_read();
 
     // Monitor: imagen en bruto y ventana visible
     std::vector<uint32_t> leg_raw, leg_fb;

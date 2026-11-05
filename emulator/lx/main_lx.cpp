@@ -9,6 +9,9 @@
 //     --scale N        ventana de 320N x 240N (3 por defecto)
 //     --cmos fichero   RAM del reloj (configuracion del SETUP del 520EX);
 //                      por defecto aleste.cmo junto a boot.rom
+//     --tape fichero   cinta CDT / TZX (modo 520EX/CPC)
+//     --cpc-mouse      ratones de CPC (Kempston, SYMBiFACE II, Multiplay)
+//     --amx-mouse      raton AMX por el joystick
 //     --boot amstrad   al pasar al 520EX (orden 520EX), SHIFT pulsado 2,5 s:
 //                      el SETUP arranca en modo AMSTRAD (BASIC del CPC)
 //   Depurador (consola en la terminal, ver debugger.h):
@@ -22,11 +25,17 @@
 //     --pcm fichero              audio (estereo, 16 bits, 48 kHz)
 //     --save-a fichero           imagen del disco A al final
 //     --cmd MS:orden             orden del depurador a los MS ms (r, t 50, d C000 ...)
+//     --mouse MS:dx,dy,botones   mueve el raton (dy hacia arriba; botones 1 izq., 2 der., 4 central)
 // Disquetes: arrastrar un .dsk a la ventana lo pone en la unidad A (con
 // Mayus, en la B); Ctrl+F1 / Ctrl+F2 abren el dialogo de ficheros para la A /
 // la B; Ctrl+Mayus+F1 / F2 expulsan. Lo que la maquina escribe se guarda en el
 // fichero de la imagen al cambiarla, al expulsarla, al salir y cada pocos
 // segundos.
+// Cinta (modo 520EX/CPC): --tape, arrastrar un .cdt/.tzx o Ctrl+F3; Ctrl+F4
+// rebobina, Ctrl+Mayus+F3 la quita. Suena con el motor encendido.
+// Raton: un clic en la ventana (o Ctrl+F5) lo captura para la maquina; Ctrl+F5
+// lo suelta. --cpc-mouse (Kempston, SYMBiFACE II, Multiplay) y --amx-mouse,
+// como las opciones del OSD; el raton serie del 520EX siempre esta.
 // Mandos: el primero va a la fila 9 de la matriz (joystick del 520EX/CPC):
 // cruceta o stick izquierdo, A/Cruz fuego 1 y B/Circulo fuego 2.
 // Teclas en la ventana: las del PC van a la maquina (tambien a la matriz del
@@ -47,12 +56,15 @@
 
 // ---- Elegir una imagen de disco: el dialogo del sistema (Windows) o zenity
 // (Linux, si esta instalado). Devuelve "" si se cancela.
-static std::string choose_disk(const char* title) {
+static std::string choose_file(const char* title, bool tape);
+static std::string choose_disk(const char* title) { return choose_file(title, false); }
+static std::string choose_file(const char* title, bool tape) {
 #ifdef _WIN32
     char file[MAX_PATH] = "";
     OPENFILENAMEA ofn = {};
     ofn.lStructSize = sizeof(ofn);
-    ofn.lpstrFilter = "Disk images (*.dsk)\0*.dsk;*.DSK\0All files\0*.*\0";
+    ofn.lpstrFilter = tape ? "Tapes (*.cdt, *.tzx)\0*.cdt;*.CDT;*.tzx;*.TZX\0All files\0*.*\0"
+                           : "Disk images (*.dsk)\0*.dsk;*.DSK\0All files\0*.*\0";
     ofn.lpstrFile = file;
     ofn.nMaxFile = sizeof(file);
     ofn.lpstrTitle = title;
@@ -60,7 +72,8 @@ static std::string choose_disk(const char* title) {
     return GetOpenFileNameA(&ofn) ? std::string(file) : std::string();
 #else
     std::string cmd = std::string("zenity --file-selection --title='") + title +
-                      "' --file-filter='Disk images | *.dsk *.DSK' --file-filter='All files | *' 2>/dev/null";
+                      (tape ? "' --file-filter='Tapes | *.cdt *.CDT *.tzx *.TZX'" : "' --file-filter='Disk images | *.dsk *.DSK'") +
+                      " --file-filter='All files | *' 2>/dev/null";
     FILE* p = popen(cmd.c_str(), "r");
     if (!p) return "";
     char buf[4096] = "";
@@ -131,6 +144,7 @@ static bool ascii_to_ps2(char ch, uint8_t& code, bool& shift) {
         {' ',0x29,0},{'|',0x5A,0},{'~',0x76,0},{'\n',0x5A,0},{'-',0x4E,0},{'_',0x4E,1},{'=',0x55,0},
         {'+',0x55,1},{'[',0x54,0},{']',0x5B,0},{';',0x4C,0},{':',0x4C,1},{'\'',0x52,0},{'"',0x52,1},
         {',',0x41,0},{'<',0x41,1},{'.',0x49,0},{'>',0x49,1},{'/',0x4A,0},{'?',0x4A,1},{'\\',0x5D,0},
+        {'{',0x54,1},{'}',0x5B,1},
     };
     shift = false;
     if (ch >= 'A' && ch <= 'Z') { shift = true; ch = ch - 'A' + 'a'; }
@@ -184,13 +198,16 @@ static void save_ppm(const Machine& m, const std::string& path) {
 }
 
 int main(int argc, char** argv) {
-    std::string rom, dska, dskb, shot, pcm, save_a, cmos;
+    std::string rom, dska, dskb, shot, pcm, save_a, cmos, tapef;
+    bool cpc_mouse = false, amx_mouse = false;
     bool headless = false, es = false, debug = false, boot_amstrad = false;
     std::vector<std::string> syms, breaks;
     double run_ms = 0;
     int scale = 3;
     std::vector<TypeJob> jobs;
     std::vector<std::pair<double, std::string>> cmds;      // --cmd MS:orden (depurador, sin ventana)
+    struct MouseJob { double ms; int dx, dy, b; bool done = false; };
+    std::vector<MouseJob> mjobs;                            // --mouse MS:dx,dy,botones (sin ventana)
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
@@ -200,6 +217,9 @@ int main(int argc, char** argv) {
         else if (a == "--keyboard") { std::string k = next(); es = (k == "es" || k == "ES"); }
         else if (a == "--debug") debug = true;
         else if (a == "--cmos") cmos = next();
+        else if (a == "--tape") tapef = next();
+        else if (a == "--cpc-mouse") cpc_mouse = true;
+        else if (a == "--amx-mouse") amx_mouse = true;
         else if (a == "--boot") { std::string b = next(); boot_amstrad = (b == "amstrad"); }
         else if (a == "--sym") syms.push_back(next());
         else if (a == "--break") breaks.push_back(next());
@@ -213,6 +233,10 @@ int main(int argc, char** argv) {
             std::string v = next();
             size_t c = v.find(':');
             if (c != std::string::npos) jobs.push_back({atof(v.substr(0, c).c_str()), v.substr(c + 1)});
+        }
+        else if (a == "--mouse") {
+            MouseJob j{};
+            if (sscanf(next().c_str(), "%lf:%d,%d,%d", &j.ms, &j.dx, &j.dy, &j.b) >= 3) mjobs.push_back(j);
         }
         else if (a == "--cmd") {
             std::string v = next();
@@ -240,6 +264,9 @@ int main(int argc, char** argv) {
     }
     m.load_cmos(cmos);
     m.boot_shift = boot_amstrad;
+    m.cpc_mouse = cpc_mouse;
+    m.amx_mouse = amx_mouse;
+    if (!tapef.empty() && !m.tape.load(tapef)) fprintf(stderr, "Cannot load tape %s\n", tapef.c_str());
     m.reset();
     lx::Debugger dbg(m);
     for (auto& f : syms) dbg.load_symbols(f);
@@ -264,6 +291,7 @@ int main(int argc, char** argv) {
         while (ms < run_ms) {
             do_typing(ms);
             for (auto& c : cmds) if (c.first >= 0 && ms >= c.first) { dbg.run_command(c.second); c.first = -1; }
+            for (auto& j : mjobs) if (!j.done && ms >= j.ms) { m.mouse_packet(j.dx, j.dy, (uint8_t)j.b); j.done = true; }
             if (!m.run_frame()) { fprintf(stderr, "Stopped: %s\n", m.stop_reason.c_str()); break; }
             if (m.break_hit) { dbg.run_command("hist 256"); break; }  // sin ventana: se para ahi
             ms += 1000.0 / 60.0;
@@ -313,13 +341,23 @@ int main(int argc, char** argv) {
         }
     };
     open_pad();
-    bool quit = false, full = false, console = false;
+    bool quit = false, full = false, console = false, mouse_grab = false;
+    uint8_t mouse_btn = 0;
     auto set_title = [&]() {
         auto dn = [&](int d) { return m.fdc.image(d).empty() ? std::string("-") : base_name(m.fdc.image(d)); };
-        std::string t = std::string("Aleste LX - A: ") + dn(0) + "  B: " + dn(1) + " - keyboard " +
-                        (m.layout_es ? "ES" : "US") + (dbg.paused() ? " - PAUSED (debugger in the terminal)" : "");
+        std::string t = std::string("Aleste LX - A: ") + dn(0) + "  B: " + dn(1);
+        if (m.tape.loaded()) t += "  tape: " + base_name(m.tape.path()) + " " + std::to_string(m.tape.percent()) + "%";
+        t += std::string(" - keyboard ") + (m.layout_es ? "ES" : "US");
+        if (mouse_grab) t += " - mouse captured (Ctrl+F5 releases)";
+        if (dbg.paused()) t += " - PAUSED (debugger in the terminal)";
         SDL_SetWindowTitle(win, t.c_str());
     };
+    auto insert_tape = [&](const std::string& f) {
+        if (f.empty()) return;
+        if (m.tape.load(f)) printf("Tape: %s\n", f.c_str()); else printf("Cannot load tape %s\n", f.c_str());
+        set_title();
+    };
+    auto set_grab = [&](bool g) { mouse_grab = g; SDL_SetRelativeMouseMode(g ? SDL_TRUE : SDL_FALSE); set_title(); };
     auto insert_disk = [&](int d, const std::string& f) {
         if (f.empty()) return;
         if (m.fdc.mount(d, f)) printf("Drive %c: %s\n", 'A' + d, f.c_str());
@@ -337,6 +375,7 @@ int main(int argc, char** argv) {
     bool was_paused = dbg.paused();
     double emu_ms = 0;
     uint32_t last_flush = SDL_GetTicks();
+    int last_title_s = 0;
     uint32_t t0 = SDL_GetTicks();
     double frames = 0;
     while (!quit) {
@@ -344,8 +383,22 @@ int main(int argc, char** argv) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) quit = true;
             else if (e.type == SDL_DROPFILE) {
-                insert_disk((SDL_GetModState() & KMOD_SHIFT) ? 1 : 0, e.drop.file);
+                std::string f = e.drop.file;
+                std::string ext = f.size() > 4 ? f.substr(f.size() - 4) : "";
+                for (auto& c : ext) c = (char)tolower(c);
+                if (ext == ".cdt" || ext == ".tzx") insert_tape(f);
+                else insert_disk((SDL_GetModState() & KMOD_SHIFT) ? 1 : 0, f);
                 SDL_free(e.drop.file);
+            }
+            else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+                if (!mouse_grab) { if (e.type == SDL_MOUSEBUTTONDOWN) set_grab(true); continue; }
+                uint8_t b = e.button.button == SDL_BUTTON_LEFT ? 1 : e.button.button == SDL_BUTTON_RIGHT ? 2 :
+                            e.button.button == SDL_BUTTON_MIDDLE ? 4 : 0;
+                if (e.type == SDL_MOUSEBUTTONDOWN) mouse_btn |= b; else mouse_btn &= ~b;
+                m.mouse_packet(0, 0, mouse_btn);
+            }
+            else if (e.type == SDL_MOUSEMOTION && mouse_grab) {
+                m.mouse_packet(e.motion.xrel, -e.motion.yrel, mouse_btn);   // PS/2: Y hacia arriba
             }
             else if (e.type == SDL_CONTROLLERDEVICEADDED || e.type == SDL_JOYDEVICEADDED) open_pad();
             else if (e.type == SDL_CONTROLLERDEVICEREMOVED || e.type == SDL_JOYDEVICEREMOVED) {
@@ -361,6 +414,22 @@ int main(int argc, char** argv) {
                         printf("Keyboard: %s (applies at the next reset, F12)\n", m.layout_es ? "Spanish" : "US");
                         set_title();
                     } else if (down) m.reset();
+                    continue;
+                }
+                if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.scancode == SDL_SCANCODE_F5) {
+                    if (down) set_grab(!mouse_grab);
+                    continue;
+                }
+                if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.scancode == SDL_SCANCODE_F3) {
+                    if (down) {
+                        if (SDL_GetModState() & KMOD_SHIFT) { m.tape.eject(); printf("Tape removed\n"); set_title(); }
+                        else insert_tape(choose_file("Tape (CDT / TZX)", true));
+                        t0 = SDL_GetTicks(); frames = 0;
+                    }
+                    continue;
+                }
+                if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.scancode == SDL_SCANCODE_F4) {
+                    if (down) { m.tape.rewind(); printf("Tape rewound\n"); set_title(); }
                     continue;
                 }
                 if ((SDL_GetModState() & KMOD_CTRL) &&
@@ -399,6 +468,9 @@ int main(int argc, char** argv) {
         }
         if (dbg.paused() != was_paused) { was_paused = dbg.paused(); set_title(); }
         if (SDL_GetTicks() - last_flush > 3000) { m.fdc.flush_all(); last_flush = SDL_GetTicks(); }
+        if (m.tape.loaded() && m.tape_motor() && (int)(SDL_GetTicks() / 1000) != last_title_s) {
+            last_title_s = SDL_GetTicks() / 1000; set_title();      // posicion de la cinta
+        }
         if (audio) {
             auto& a = m.audio();
             if (SDL_GetQueuedAudioSize(audio) < (uint32_t)lx::AUDIO_RATE)   // menos de ~0,25 s en cola

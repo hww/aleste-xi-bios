@@ -584,6 +584,8 @@ int Machine::step() {
         if (t <= 0) t = 4;
         leg_time(t);
         ms_time(t);
+        serial_time(t);
+        tape.run(t, 4e6, ppi_c & 0x10);
         leg_since += t;
     } else {
         pic_update();

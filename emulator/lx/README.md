@@ -49,10 +49,23 @@ And the 520EX MagicSound (Patisonic's board, as in the core's
 channel, the inverted DMA page mapper and the end-of-block NMI the MAG player
 uses; channels A and D on the left, B and C on the right.
 
+Mice, as in the core: the 520EX serial mouse on the 8251 (Mouse Systems
+packets at 1200 baud, only while the receiver is enabled; the MSX-DOS BIOS
+uses it), and the CPC mice Kempston (FBEE/FBEF/FAEF), SYMBiFACE II (FD10),
+Multiplay (F990-F997) with `--cpc-mouse`, and AMX on the joystick row with
+`--amx-mouse`. Click in the window (or Ctrl+F5) to capture the PC mouse;
+Ctrl+F5 releases it.
+
+Tape: TZX/CDT files with the same blocks as the core's player (10-15, 20-25,
+2A, 2B, 30-35, 5A), decoded to pulses and played while the motor (PPI PC4)
+is on, into PB7. `--tape file`, drop a .cdt/.tzx into the window or Ctrl+F3;
+Ctrl+F4 rewinds, Ctrl+Shift+F3 removes it; the title shows the position.
+`tools/make_cdt.py` turns a binary into a CPC firmware CDT (1000 baud).
+
 Done: 520EX boot screen, CPC BASIC with keyboard and sound, MSX-DOS 1.04
 booting from `alestedos-dev.dsk` (FOTON-127 BIOS, COMMAND 2.2A, DIR, disk
-change) and MAG.COM playing the STM songs of `mag-player.dsk`. Still to
-come: mouse and tape.
+change), MAG.COM playing the STM songs of `mag-player.dsk`, serial mouse and
+tape loading.
 
 Not yet in native mode: IPC and the graphics accelerator.
 
@@ -68,7 +81,7 @@ from `../deps/z80ex`.
 
     alestelx [-a disk.dsk] [-b disk.dsk] [--keyboard us|es] [--scale N]
              [--debug] [--sym file.map] [--break addr] [--boot amstrad]
-             [--cmos file] boot.rom
+             [--cmos file] [--tape file] [--cpc-mouse] [--amx-mouse] boot.rom
 
 `boot.rom` is the same file as on the MiSTer SD (`games/AlesteLX/boot.rom`:
 LX.ROM, optionally followed by AL512.BIN). `--keyboard` is the OSD Keyboard
@@ -127,7 +140,8 @@ Headless mode, for automated tests (the same checks as the core testbench):
              --shot screen.ppm --pcm audio.raw --save-a after.dsk boot.rom
 
 `--type MS:text` types the text at MS milliseconds of machine time (`|` is
-Enter, `~` Esc), `--cmd MS:command` runs a debugger command then (with a
+Enter, `~` Esc), `--mouse MS:dx,dy,buttons` moves the mouse,
+`--cmd MS:command` runs a debugger command then (with a
 breakpoint, the run stops there and prints the history), `--shot` saves the screen (PPM), `--pcm` the Magic Sound 2
 output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 
@@ -145,3 +159,5 @@ output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.
 | `520ex` with `alestedos-dev.dsk` in A | MSX-DOS 1.04 boots (FOTON-127 BIOS, COMMAND 2.2A, today's date), `dir` lists the 25 files |
 | disk change while MSX-DOS runs | `dir` shows the new disk; writes reach the image file |
 | `mag axelf` from `mag-player.dsk` | MAG plays AXELF.STM in stereo through the MagicSound, VU meters moving |
+| `mouse1` from `alestedos-dev.dsk`, mouse moved 252 right / 126 down | shows 84 and 42 (the BIOS scales by 1/3): serial mouse packets through the 8251 |
+| CPC BASIC: `\|tape`, `run"` with a CDT from `tools/make_cdt.py` (`tests/tapeok.asm`) | the firmware loads it at 1000 baud (header and data with CRCs) and runs it |
