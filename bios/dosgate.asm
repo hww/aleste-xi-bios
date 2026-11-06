@@ -1,25 +1,26 @@
 ; =============================================================================
-; DOSGATE.ASM - Puertas entre los programas .COM y el LX-DOS (Aleste LX)
-; Shaeon (Carlos Palmero), para el core AlesteLX_MiSTer.
+; DOSGATE.ASM - Gateways between .COM programs and LX-DOS (Aleste LX)
+; Shaeon (Carlos Palmero), for the AlesteLX_MiSTer core.
 ;
-; Mapas de memoria (slot 3 del supervisor):
-;   LX-DOS     ventanas 0-2 = bancos 20h, 21h, 22h   ventana 3 = ROM (drivers)
-;   programa   ventanas 0-2 = bancos 24h, 25h, 26h   ventana 3 = ROM (drivers)
-; La ventana 3 es la unica comun, asi que aqui (DRV_CODE) estan las puertas:
+; Memory maps (supervisor slot 3):
+;   LX-DOS    windows 0-2 = banks 20h, 21h, 22h   window 3 = ROM (drivers)
+;   program   windows 0-2 = banks 24h, 25h, 26h   window 3 = ROM (drivers)
+; Window 3 is the only shared one, so the gateways live here (DRV_CODE):
 ;
-;   __dos_exec        (desde el LX-DOS) pone el mapa del programa y salta a
-;                     0100h con SP = BF00h y 0000h en la pila. Vuelve cuando
-;                     el programa acaba (JP 0, RET a 0000h o BDOS 0).
-;   __dos_bdos_gate   CALL 5 -> JP BF00h -> aqui. Guarda C y DE, pone el mapa
-;                     del LX-DOS y llama a la rutina que este haya dejado en
-;                     __dos_bdos_vec (con la pila del LX-DOS); vuelve con
-;                     HL, A = L y B = H, como CP/M.
-;   __dos_bios_gate   la tabla del BIOS de CP/M (BF03h) llega aqui con A = n
-;                     de funcion y C = caracter; llama a __dos_bios_vec.
-;   __dos_isr_gate    IM 1 con el programa en marcha (su 0038h salta aqui):
-;                     pone el mapa del LX-DOS, despacha la interrupcion y
-;                     vuelve a dejar el mapa como estaba.
-;   __dos_wboot_gate  0000h del programa: vuelve al LX-DOS (tras __dos_exec).
+;   __dos_exec        (called from LX-DOS) installs the program map and jumps
+;                     to 0100h with SP = BF00h and 0000h pushed on the stack.
+;                     Returns when the program finishes (JP 0, RET to 0000h,
+;                     or BDOS function 0).
+;   __dos_bdos_gate   CALL 5 -> JP BF00h -> here. Saves C and DE, installs the
+;                     LX-DOS map, and calls whatever routine LX-DOS left in
+;                     __dos_bdos_vec (using the LX-DOS stack); returns with
+;                     HL and A = L, B = H, CP/M-style.
+;   __dos_bios_gate   the CP/M BIOS table (BF03h) arrives here with A = function
+;                     number and C = character; calls __dos_bios_vec.
+;   __dos_isr_gate    IM 1 while a program is running (its 0038h vector jumps
+;                     here): installs the LX-DOS map, dispatches the interrupt,
+;                     then restores the previous map.
+;   __dos_wboot_gate  the program's 0000h: return to LX-DOS (after __dos_exec).
 ; =============================================================================
 
 module dosgate
@@ -40,6 +41,13 @@ PUBLIC __dos_xret, __dos_ret_a, __dos_ret_bc, __dos_ret_de, __dos_ret_hl, __dos_
 
 SECTION DRV_CODE
 
+; -----------------------------------------------------------------------------
+; map_sys - Install the LX-DOS memory map (banks 20h/21h/22h in windows 0-2)
+; -----------------------------------------------------------------------------
+; Input:  None
+; Output: None
+; Clobbers: A
+; -----------------------------------------------------------------------------
 map_sys:
     ld a, SYS_BANK0
     out (0xFC), a
@@ -49,89 +57,121 @@ map_sys:
     out (0xFE), a
     ret
 
-; Nota: entre el cambio de mapa y el de SP no se usa la pila (la de un mapa
-; no se ve desde el otro).
+; Note: between switching the map and switching SP the stack is not used,
+; because a stack in one map is not visible from the other.
 
-; ---- desde el LX-DOS: el programa ya esta en los bancos 24h-26h
+; -----------------------------------------------------------------------------
+; __dos_exec - Enter a .COM program from LX-DOS
+; -----------------------------------------------------------------------------
+; Assumes the program is already loaded into banks 24h-26h.
+; Saves the LX-DOS SP, installs the program map, sets up the TPA stack with
+; 0000h pushed so that a RET from the program returns to LX-DOS, and jumps to
+; 0100h.
+;
+; Input:  None
+; Output: Returns (via __dos_wboot_gate) when the program terminates
+; Clobbers: A, SP (restored on return)
+; -----------------------------------------------------------------------------
 __dos_exec:
     di
-    ld (exec_sp), sp
-    ld a, TPA_BANK0
+    ld (exec_sp), sp            ; Save the LX-DOS SP
+    ld a, TPA_BANK0             ; Install the program map
     out (0xFC), a
     ld a, TPA_BANK1
     out (0xFD), a
     ld a, TPA_BANK2
     out (0xFE), a
-                                ; (la pila del LX-DOS deja de verse: sin pila aqui)
-    ld sp, TPA_TOP
+                                ; (LX-DOS stack is no longer visible: no stack here)
+    ld sp, TPA_TOP              ; Program stack top
     ld hl, 0
-    push hl                     ; RET del programa = 0000h = vuelta al LX-DOS
+    push hl                     ; Program's RET target = 0000h = return to LX-DOS
     ei
-    jp 0x0100
+    jp 0x0100                   ; Enter the program
 
-; ---- 0000h del programa
+; -----------------------------------------------------------------------------
+; __dos_wboot_gate - Program's 0000h vector: return to LX-DOS
+; -----------------------------------------------------------------------------
+; Reinstalls the LX-DOS map, restores the saved SP, and RETs back into
+; __dos_exec (whose caller then continues).
+;
+; Input:  None (reached via RET-to-0000h, JP 0, or BDOS 0)
+; Output: Returns to LX-DOS caller of __dos_exec
+; Clobbers: A, SP
+; -----------------------------------------------------------------------------
 __dos_wboot_gate:
     di
-    ld a, SYS_BANK0
+    ld a, SYS_BANK0             ; Restore the LX-DOS map
     out (0xFC), a
     ld a, SYS_BANK1
     out (0xFD), a
     ld a, SYS_BANK2
     out (0xFE), a
-    ld sp, (exec_sp)
+    ld sp, (exec_sp)            ; Restore the LX-DOS SP
     ei
-    ret                         ; vuelve de __dos_exec
+    ret                         ; Return from __dos_exec
 
-; ---- CALL 5 (via BF00h): C = funcion, DE = parametro
+; -----------------------------------------------------------------------------
+; __dos_bdos_gate - BDOS gateway for CALL 5 (reached via JP BF00h)
+; -----------------------------------------------------------------------------
+; Input:  C = BDOS function, DE = parameter, HL = parameter, B = parameter
+; Output: A = L, B = H (CP/M style); DE preserved for programs that need it.
+;         If __dos_xret is set by LX-DOS, returns A/BC/DE/HL from __dos_ret_*.
+; Clobbers: As per the called BDOS function
+; -----------------------------------------------------------------------------
 __dos_bdos_gate:
     di
-    ld (prog_sp), sp
-    ld (__dos_reg_de), de
-    ld (__dos_reg_hl), hl
+    ld (prog_sp), sp            ; Save the program's SP
+    ld (__dos_reg_de), de       ; Save DE (restored on return)
+    ld (__dos_reg_hl), hl       ; Save HL (also used as __dos_reg_hl_b byte pair)
     ld a, b
-    ld (__dos_reg_b), a
+    ld (__dos_reg_b), a         ; Save B
     ld a, c
-    ld (__dos_reg_c), a
+    ld (__dos_reg_c), a         ; Save C (BDOS function number)
     or a
-    jp z, __dos_wboot_gate      ; funcion 0: fin del programa
-    ld a, SYS_BANK0             ; mapa del LX-DOS, sin tocar la pila
+    jp z, __dos_wboot_gate      ; Function 0 = terminate program
+    ld a, SYS_BANK0             ; Install LX-DOS map (without touching the stack)
     out (0xFC), a
     ld a, SYS_BANK1
     out (0xFD), a
     ld a, SYS_BANK2
     out (0xFE), a
-    ld sp, (exec_sp)            ; pila del LX-DOS, debajo de su llamada a __dos_exec
+    ld sp, (exec_sp)            ; LX-DOS stack, below its call to __dos_exec
     ei
-    push ix                     ; los del programa (el C del LX-DOS usa IX)
+    push ix                     ; Preserve the program's IX (LX-DOS C code uses IX)
     push iy
-    ld hl, (__dos_bdos_vec)
+    ld hl, (__dos_bdos_vec)     ; LX-DOS BDOS entry point
     call jp_hl                  ; -> HL
     pop iy
     pop ix
+
+; -----------------------------------------------------------------------------
+; gate_back - Common return path: restore the program map and registers
+; -----------------------------------------------------------------------------
 gate_back:
     di
-    ex de, hl                   ; resultado a DE mientras cambia el mapa
-    ld a, TPA_BANK0
+    ex de, hl                   ; Move the result to DE while switching maps
+    ld a, TPA_BANK0             ; Install the program map
     out (0xFC), a
     ld a, TPA_BANK1
     out (0xFD), a
     ld a, TPA_BANK2
     out (0xFE), a
-    ld sp, (prog_sp)
+    ld sp, (prog_sp)            ; Restore the program's SP
     ld a, (__dos_xret)
     or a
-    jr nz, gate_xret
+    jr nz, gate_xret            ; LX-DOS requested a full-register return
     ex de, hl
-    ld a, l
-    ld b, h
-    ld de, (__dos_reg_de)       ; DE se conserva (algunos programas lo esperan)
+    ld a, l                     ; A = L
+    ld b, h                     ; B = H
+    ld de, (__dos_reg_de)       ; DE is preserved (some programs rely on it)
     ei
     ret
-; Vuelta con todos los registros (funciones de MSX-DOS que devuelven A, BC,
-; DE y HL a la vez): los deja el LX-DOS en __dos_ret_* y pone __dos_xret
+
+; Full-register return (MSX-DOS functions that return A, BC, DE and HL at
+; once): LX-DOS leaves the values in __dos_ret_* and sets __dos_xret.
 gate_xret:
     xor a
-    ld (__dos_xret), a
+    ld (__dos_xret), a          ; Clear the full-return flag
     ld bc, (__dos_ret_bc)
     ld de, (__dos_ret_de)
     ld hl, (__dos_ret_hl)
@@ -139,76 +179,98 @@ gate_xret:
     ei
     ret
 
-; ---- tabla del BIOS de CP/M: A = funcion, C = caracter
+; -----------------------------------------------------------------------------
+; __dos_bios_gate - CP/M BIOS gateway (table at BF03h)
+; -----------------------------------------------------------------------------
+; Input:  A = BIOS function number, C = character
+; Output: As per the BIOS function
+; Clobbers: As per the called BIOS function
+; -----------------------------------------------------------------------------
 __dos_bios_gate:
     di
     ld (prog_sp), sp
-    ld (__dos_reg_a), a
+    ld (__dos_reg_a), a         ; Save A (function number)
     ld a, c
-    ld (__dos_reg_c), a
+    ld (__dos_reg_c), a         ; Save C (character)
     ld a, (__dos_reg_a)
     cp 1
-    jp z, __dos_wboot_gate      ; WBOOT
-    ld a, SYS_BANK0
+    jp z, __dos_wboot_gate      ; Function 1 = WBOOT (warm boot)
+    ld a, SYS_BANK0             ; Install LX-DOS map
     out (0xFC), a
     ld a, SYS_BANK1
     out (0xFD), a
     ld a, SYS_BANK2
     out (0xFE), a
-    ld sp, (exec_sp)
+    ld sp, (exec_sp)            ; LX-DOS stack
     ei
-    push ix
+    push ix                     ; Preserve the program's IX/IY
     push iy
-    ld hl, (__dos_bios_vec)
+    ld hl, (__dos_bios_vec)     ; LX-DOS BIOS entry point
     call jp_hl
     pop iy
     pop ix
-    jr gate_back
+    jr gate_back                ; Common return path
 
-; ---- IM 1 con el programa en marcha
+; -----------------------------------------------------------------------------
+; __dos_isr_gate - IM 1 handler while a program is running
+; -----------------------------------------------------------------------------
+; The program's 0038h vector jumps here. Saves the current bank map, installs
+; the LX-DOS map, dispatches the interrupt via __int_lx_dispatch, then restores
+; the previous bank map and returns with RETI.
+;
+; Input:  None (invoked by the IM 1 interrupt)
+; Output: Returns via RETI (interrupts restored)
+; Clobbers: As per the dispatched handler
+; -----------------------------------------------------------------------------
 __dos_isr_gate:
-    ld (isr_sp), sp
-    ld sp, isr_stack_top
+    ld (isr_sp), sp             ; Save the interrupted SP
+    ld sp, isr_stack_top        ; Switch to the dedicated ISR stack
     push af
-    in a, (0xFC)                ; mapa de ahora (el del programa o el del LX-DOS)
+    in a, (0xFC)                ; Read the current map (program's or LX-DOS's)
     push af
     in a, (0xFD)
     push af
     in a, (0xFE)
     push af
-    call map_sys
-    call __int_lx_dispatch      ; las rutinas del LX-DOS y de la ROM se ven
-    pop af
+    call map_sys                ; Install the LX-DOS map
+    call __int_lx_dispatch      ; LX-DOS and ROM routines are now visible
+    pop af                      ; Restore the previous bank map
     out (0xFE), a
     pop af
     out (0xFD), a
     pop af
     out (0xFC), a
     pop af
-    ld sp, (isr_sp)
+    ld sp, (isr_sp)             ; Restore the interrupted SP
     ei
     reti
 
+; -----------------------------------------------------------------------------
+; jp_hl - Indirect jump to HL
+; -----------------------------------------------------------------------------
+; Input:  HL = target address
+; Output: Does not return (jumps to HL)
+; -----------------------------------------------------------------------------
 jp_hl:
     jp (hl)
 
 SECTION DRV_DATA
 
-__dos_bdos_vec: dw 0
-__dos_bios_vec: dw 0
-__dos_reg_c:    db 0
-__dos_reg_a:    db 0
-__dos_reg_de:   dw 0
-__dos_reg_hl_b:                 ; (el mismo, byte a byte, para el C)
-__dos_reg_hl:   dw 0            ; HL y B del programa (funciones de bloque y absolutas)
-__dos_reg_b:    db 0
-__dos_xret:     db 0
-__dos_ret_a:    db 0
-__dos_ret_bc:   dw 0
-__dos_ret_de:   dw 0
-__dos_ret_hl:   dw 0
-exec_sp:        dw 0
-prog_sp:        dw 0
-isr_sp:         dw 0
-isr_stack:      ds 256
-isr_stack_top:
+__dos_bdos_vec: dw 0            ; LX-DOS BDOS entry point (set by LX-DOS)
+__dos_bios_vec: dw 0            ; LX-DOS BIOS entry point (set by LX-DOS)
+__dos_reg_c:    db 0            ; Saved C (BDOS function / BIOS character)
+__dos_reg_a:    db 0            ; Saved A (BIOS function number)
+__dos_reg_de:   dw 0            ; Saved DE (restored on BDOS return)
+__dos_reg_hl_b:                 ; Same as __dos_reg_hl, byte-accessed from C
+__dos_reg_hl:   dw 0            ; Saved HL and B of the program (block/absolute functions)
+__dos_reg_b:    db 0            ; Saved B
+__dos_xret:     db 0            ; Non-zero = return A/BC/DE/HL from __dos_ret_*
+__dos_ret_a:    db 0            ; Full-register return: A
+__dos_ret_bc:   dw 0            ; Full-register return: BC
+__dos_ret_de:   dw 0            ; Full-register return: DE
+__dos_ret_hl:   dw 0            ; Full-register return: HL
+exec_sp:        dw 0            ; LX-DOS SP saved by __dos_exec
+prog_sp:        dw 0            ; Program SP saved by the gateways
+isr_sp:         dw 0            ; Interrupted SP saved by __dos_isr_gate
+isr_stack:      ds 256          ; Dedicated ISR stack
+isr_stack_top:                  ; Top of the ISR stack
