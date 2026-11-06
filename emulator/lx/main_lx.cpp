@@ -55,6 +55,7 @@
 #include <thread>
 #include <chrono>
 #ifdef _WIN32
+#define NOMINMAX                    // sin las macros min/max de windows.h (std::min, std::max)
 #include <windows.h>
 #include <commdlg.h>
 #endif
@@ -91,6 +92,24 @@ static std::string choose_file(const char* title, bool tape) {
     return f;
 #endif
 }
+
+#ifdef _WIN32
+// En Windows, SDL puede dejar la entrada y la salida estandar fuera de la
+// consola, y el depurador no recibe lo que se escribe hasta cerrar el
+// emulador (lo encontro y arreglo Valery / hww). Se devuelven a la consola,
+// pero solo las que no se han redirigido a proposito (tuberia o fichero), para
+// que sigan valiendo las pruebas automaticas y "alestelx ... > log.txt".
+static void console_stdio() {
+    if (!GetConsoleWindow()) return;
+    auto redirected = [](DWORD h) {
+        DWORD t = GetFileType(GetStdHandle(h));
+        return t == FILE_TYPE_PIPE || t == FILE_TYPE_DISK;
+    };
+    if (!redirected(STD_INPUT_HANDLE))  freopen("CONIN$", "r", stdin);
+    if (!redirected(STD_OUTPUT_HANDLE)) freopen("CONOUT$", "w", stdout);
+    if (!redirected(STD_ERROR_HANDLE))  freopen("CONOUT$", "w", stderr);
+}
+#endif
 
 static std::string base_name(const std::string& p) {
     size_t s = p.find_last_of("/\\");
@@ -331,6 +350,9 @@ int main(int argc, char** argv) {
     }
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+#ifdef _WIN32
+    console_stdio();
+#endif
     SDL_Window* win = SDL_CreateWindow("Aleste LX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                        320 * scale, 240 * scale, SDL_WINDOW_RESIZABLE);
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);

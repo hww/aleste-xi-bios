@@ -1,7 +1,8 @@
 # alestelx: emulador del Aleste LX (modo nativo) para Windows y Linux
 #   cmake -S . -B build && cmake --build build
-# Necesita SDL2. En Windows: SDL2 de vcpkg o los "development libraries"
-# de libsdl.org (SDL2_DIR apuntando a su carpeta cmake).
+# Necesita SDL2. En Windows: SDL2 de vcpkg (cmake --preset default, con
+# VCPKG_ROOT; ver CMakePresets.json) o los "development libraries" de
+# libsdl.org (SDL2_DIR apuntando a su carpeta cmake).
 # z80ex se compila desde ../deps/z80ex. El emulador original (z80_emu, con su
 # Makefile) sigue aparte.
 cmake_minimum_required(VERSION 3.16)
@@ -18,7 +19,7 @@ set(Z80EX ${CMAKE_CURRENT_SOURCE_DIR}/../deps/z80ex)
 add_library(z80ex STATIC ${Z80EX}/z80ex.c ${Z80EX}/z80ex_dasm.c)
 target_include_directories(z80ex PUBLIC ${Z80EX}/include ${Z80EX})
 target_compile_definitions(z80ex PRIVATE WORDS_LITTLE_ENDIAN Z80EX_VERSION_STR=1.1.21 Z80EX_API_REVISION=1
-                           Z80EX_VERSION_MAJOR=1 Z80EX_VERSION_MINOR=21 Z80EX_RELEASE_TYPE=)
+                           Z80EX_VERSION_MAJOR=1 Z80EX_VERSION_MINOR=21 Z80EX_RELEASE_TYPE="")   # "": MSVC no admite el argumento vacio
 
 add_executable(alestelx lx/main_lx.cpp lx/machine.cpp lx/legacy.cpp lx/fdc765.cpp lx/tape.cpp lx/debugger.cpp lx/gdbserver.cpp)
 find_package(Threads REQUIRED)
@@ -36,6 +37,10 @@ else()
   target_include_directories(alestelx PRIVATE ${SDL2_INCLUDE_DIRS})
   target_link_libraries(alestelx PRIVATE ${SDL2_LIBRARIES})
 endif()
+
+# Programa de consola tambien en Windows: el depurador lee la terminal
+# (arreglo de Valery / hww para Visual Studio + vcpkg)
+set_target_properties(alestelx PROPERTIES WIN32_EXECUTABLE FALSE)
 
 # Pruebas: ctest --test-dir build
 enable_testing()
