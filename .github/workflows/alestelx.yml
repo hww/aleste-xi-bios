@@ -3,9 +3,9 @@
 # them as a GitHub release.
 #
 # The packages include LX.ROM (as boot.rom) and LXDOS.DSK from the MiSTer core
-# repository (CORE_REPO). For the Aleste 520EX mode, append the 520EX ROM:
-#   copy /b boot.rom + AL512.BIN boot.rom      (Windows)
-#   cat LX.ROM AL512.BIN > boot.rom            (Linux)
+# repository (CORE_REPO). For the Aleste 520EX mode, put the 520EX ROM
+# (AL512.BIN, MAME set al520ex, not distributed) next to boot.rom: the
+# emulator loads it by itself (or --rom520 file).
 name: alestelx emulator
 
 on:

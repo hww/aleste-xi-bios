@@ -39,6 +39,8 @@ public:
     ~Machine();
 
     bool load_boot_rom(const std::string& path);       // LX.ROM [+ AL512.BIN]
+    bool load_rom520(const std::string& path);         // AL512.BIN aparte (en 400000)
+    bool has_rom520 = false;                           // boot.rom traia la ROM del 520EX
     bool load_raw(const std::string& path, uint32_t phys);
     void reset();
 

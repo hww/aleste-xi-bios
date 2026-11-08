@@ -10,6 +10,8 @@
 //     --cmos fichero   RAM del reloj (configuracion del SETUP del 520EX);
 //                      por defecto aleste.cmo junto a boot.rom
 //     --tape fichero   cinta CDT / TZX (modo 520EX/CPC)
+//     --rom520 fichero la ROM del 520EX (AL512.BIN) si boot.rom no la trae;
+//                      sin la opcion, se usa un AL512.BIN junto a boot.rom
 //     --cpc-mouse      ratones de CPC (Kempston, SYMBiFACE II, Multiplay)
 //     --amx-mouse      raton AMX por el joystick
 //     --boot amstrad   al pasar al 520EX (orden 520EX), SHIFT pulsado 2,5 s:
@@ -222,7 +224,7 @@ static void save_ppm(const Machine& m, const std::string& path) {
 }
 
 int main(int argc, char** argv) {
-    std::string rom, dska, dskb, shot, pcm, save_a, cmos, tapef;
+    std::string rom, dska, dskb, shot, pcm, save_a, cmos, tapef, rom520;
     bool cpc_mouse = false, amx_mouse = false;
     int gdb_port = 0;
     bool headless = false, es = false, debug = false, boot_amstrad = false;
@@ -243,6 +245,7 @@ int main(int argc, char** argv) {
         else if (a == "--debug") debug = true;
         else if (a == "--cmos") cmos = next();
         else if (a == "--tape") tapef = next();
+        else if (a == "--rom520") rom520 = next();
         else if (a == "--gdb") gdb_port = atoi(next().c_str());
         else if (a == "--cpc-mouse") cpc_mouse = true;
         else if (a == "--amx-mouse") amx_mouse = true;
@@ -280,6 +283,15 @@ int main(int argc, char** argv) {
 
     static Machine m;
     if (!m.load_boot_rom(rom)) { fprintf(stderr, "Cannot load %s\n", rom.c_str()); return 1; }
+    // La ROM del 520EX: --rom520, o un AL512.BIN junto a boot.rom si esta no
+    // la trae (boot.rom = LX.ROM sola, como en los paquetes de GitHub)
+    if (!rom520.empty()) {
+        if (!m.load_rom520(rom520)) { fprintf(stderr, "Cannot load %s\n", rom520.c_str()); return 1; }
+    } else if (!m.has_rom520) {
+        std::string dir = rom.substr(0, rom.find_last_of("/\\") == std::string::npos ? 0 : rom.find_last_of("/\\") + 1);
+        for (const char* nm : {"AL512.BIN", "al512.bin", "Al512.bin"})
+            if (m.load_rom520(dir + nm)) { printf("520EX ROM: %s%s\n", dir.c_str(), nm); break; }
+    }
     if (!dska.empty() && !m.fdc.mount(0, dska)) fprintf(stderr, "Cannot mount %s\n", dska.c_str());
     if (!dskb.empty() && !m.fdc.mount(1, dskb)) fprintf(stderr, "Cannot mount %s\n", dskb.c_str());
     m.layout_es = es;

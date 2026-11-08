@@ -30,6 +30,13 @@ emulador funciona en la MiSTer.
 SDL2 (`sudo apt install libsdl2-2.0-0` en Debian/Ubuntu). `img2lx.py`
 necesita Python 3 con Pillow (`pip install pillow`).
 
+**La ROM del 520EX.** El modo Aleste 520EX necesita la ROM original del
+520EX, `AL512.BIN` (64 KB, set `al520ex` de MAME), que no se distribuye con
+el emulador. O `boot.rom` ya la trae (LX.ROM seguida de AL512.BIN, como en
+la MiSTer), o pon `AL512.BIN` en la misma carpeta que `boot.rom` y el
+emulador la carga solo (o `--rom520 fichero`). Sin ella, la orden `520ex`
+avisa de que falta la ROM.
+
 Usa `boot.rom` y `LXDOS.DSK` del mismo paquete: la ROM comprueba que el
 LX-DOS se compiló con ella y no arranca uno distinto (lo dice en pantalla).
 
@@ -193,6 +200,7 @@ con el emulador en marcha.
 | `--scale N` | ventana de 320N × 240N (3 por defecto) |
 | `--boot amstrad` | 520EX: Mayús al entrar, modo AMSTRAD (BASIC del CPC) |
 | `--tape fichero` | cinta (CDT / TZX) para el modo 520EX/CPC |
+| `--rom520 fichero` | la ROM del 520EX (AL512.BIN) si boot.rom no la trae (por defecto, un AL512.BIN junto a boot.rom) |
 | `--cmos fichero` | fichero de la RAM del reloj (por defecto `aleste.cmo` junto a `boot.rom`) |
 | `--cpc-mouse`, `--amx-mouse` | ratones de CPC / ratón AMX |
 | `--debug` | arrancar parado con la consola del depurador |
@@ -211,6 +219,8 @@ depurador), `--mouse MS:dx,dy,botones`.
 
 - **"LXDOS.SYS was built for another ROM":** `boot.rom` y `LXDOS.DSK` son de
   compilaciones distintas. Usa los dos del mismo paquete.
+- **"Aleste 520EX ROM not found" tras `520ex`:** pon `AL512.BIN` junto a
+  `boot.rom` (apartado 1).
 - **Pantalla negra o ruido en los modos gráficos del LX:** comprueba que el
   emulador es del mismo paquete (un `.exe` viejo no conoce el modo de 256
   colores).

@@ -84,7 +84,8 @@ matrix test, a headless LX-DOS boot and the GDB server test, and uploads
 both packages as artifacts (Actions tab > run > Artifacts), with LX.ROM and
 LXDOS.DSK taken from the MiSTer core repository. Pushing a tag
 `alestelx-v*` (e.g. `alestelx-v0.1`) also publishes them as a release. For
-the 520EX mode, append the 520EX ROM (AL512.BIN) to boot.rom.
+the 520EX mode, put the 520EX ROM (AL512.BIN, not distributed) next to
+boot.rom: the emulator loads it by itself.
 
 ## Launchers
 

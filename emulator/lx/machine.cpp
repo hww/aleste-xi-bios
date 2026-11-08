@@ -52,6 +52,19 @@ bool Machine::load_boot_rom(const std::string& path) {
     size_t a = std::min<size_t>(n, 0x10000);
     memcpy(&mem[ROM_BASE], d.data(), a);
     if (n > 0x10000) memcpy(&mem[ROM2_BASE], d.data() + 0x10000, n - 0x10000);
+    has_rom520 = n > 0x10000;
+    return true;
+}
+
+// La ROM del 520EX en un fichero aparte (AL512.BIN, 64 KB): donde la pondria
+// el cargador del core si fuera detras de LX.ROM en boot.rom
+bool Machine::load_rom520(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    size_t n = fread(&mem[ROM2_BASE], 1, 0x10000, f);
+    fclose(f);
+    if (n == 0) return false;
+    has_rom520 = true;
     return true;
 }
 

@@ -29,6 +29,13 @@ hardware description, so what works in the emulator works on the MiSTer.
 `.exe`). Linux: SDL2 (`sudo apt install libsdl2-2.0-0` on Debian/Ubuntu).
 `img2lx.py` needs Python 3 with Pillow (`pip install pillow`).
 
+**The 520EX ROM.** The Aleste 520EX mode needs the original 520EX ROM,
+`AL512.BIN` (64 KB, MAME set `al520ex`), which is not distributed with the
+emulator. Either `boot.rom` already contains it (LX.ROM followed by
+AL512.BIN, as on the MiSTer), or put `AL512.BIN` in the same folder as
+`boot.rom` and the emulator loads it by itself (or `--rom520 file`). Without
+it, the `520ex` command says that the ROM is missing.
+
 Keep `boot.rom` and `LXDOS.DSK` from the same package: the ROM checks that
 LX-DOS was built with it and refuses to boot a different one (it says so on
 screen).
@@ -187,6 +194,7 @@ fire 1, B/Circle fire 2. It can be plugged in or out while running.
 | `--scale N` | window of 320N × 240N (3 by default) |
 | `--boot amstrad` | 520EX: hold Shift at the switch, AMSTRAD mode (CPC BASIC) |
 | `--tape file` | tape (CDT / TZX) for the 520EX/CPC mode |
+| `--rom520 file` | the 520EX ROM (AL512.BIN) when boot.rom doesn't contain it (by default, an AL512.BIN next to boot.rom) |
 | `--cmos file` | clock RAM file (default `aleste.cmo` next to `boot.rom`) |
 | `--cpc-mouse`, `--amx-mouse` | CPC mice / AMX mouse |
 | `--debug` | start paused with the debugger console |
@@ -204,6 +212,8 @@ at the end), `--cmd MS:command` (debugger command), `--mouse MS:dx,dy,buttons`.
 
 - **"LXDOS.SYS was built for another ROM":** `boot.rom` and `LXDOS.DSK` come
   from different builds. Use both from the same package.
+- **"Aleste 520EX ROM not found" after `520ex`:** put `AL512.BIN` next to
+  `boot.rom` (section 1).
 - **Black screen or garbage in the LX graphics modes:** make sure the
   emulator is from the same package (an old `.exe` does not know the 256
   colour mode).
