@@ -30,11 +30,12 @@ hardware description, so what works in the emulator works on the MiSTer.
 `img2lx.py` needs Python 3 with Pillow (`pip install pillow`).
 
 **The 520EX ROM.** The Aleste 520EX mode needs the original 520EX ROM,
-`AL512.BIN` (64 KB, MAME set `al520ex`), which is not distributed with the
-emulator. Either `boot.rom` already contains it (LX.ROM followed by
-AL512.BIN, as on the MiSTer), or put `AL512.BIN` in the same folder as
-`boot.rom` and the emulator loads it by itself (or `--rom520 file`). Without
-it, the `520ex` command says that the ROM is missing.
+`AL512.BIN` (64 KB, MAME set `al520ex`). The packages built on GitHub
+already include it inside `boot.rom` (LX.ROM followed by AL512.BIN, as on
+the MiSTer; see `ROMS.md`). With a `boot.rom` that only has LX.ROM, put
+`AL512.BIN` in the same folder and the emulator loads it by itself (or
+`--rom520 file`). Without it, the `520ex` command says that the ROM is
+missing.
 
 Keep `boot.rom` and `LXDOS.DSK` from the same package: the ROM checks that
 LX-DOS was built with it and refuses to boot a different one (it says so on

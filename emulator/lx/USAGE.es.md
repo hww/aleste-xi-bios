@@ -31,11 +31,11 @@ SDL2 (`sudo apt install libsdl2-2.0-0` en Debian/Ubuntu). `img2lx.py`
 necesita Python 3 con Pillow (`pip install pillow`).
 
 **La ROM del 520EX.** El modo Aleste 520EX necesita la ROM original del
-520EX, `AL512.BIN` (64 KB, set `al520ex` de MAME), que no se distribuye con
-el emulador. O `boot.rom` ya la trae (LX.ROM seguida de AL512.BIN, como en
-la MiSTer), o pon `AL512.BIN` en la misma carpeta que `boot.rom` y el
-emulador la carga solo (o `--rom520 fichero`). Sin ella, la orden `520ex`
-avisa de que falta la ROM.
+520EX, `AL512.BIN` (64 KB, set `al520ex` de MAME). Los paquetes que compila
+GitHub ya la traen dentro de `boot.rom` (LX.ROM seguida de AL512.BIN, como
+en la MiSTer; ver `ROMS.md`). Con un `boot.rom` que solo lleve LX.ROM, pon
+`AL512.BIN` en la misma carpeta y el emulador la carga solo (o `--rom520
+fichero`). Sin ella, la orden `520ex` avisa de que falta la ROM.
 
 Usa `boot.rom` y `LXDOS.DSK` del mismo paquete: la ROM comprueba que el
 LX-DOS se compiló con ella y no arranca uno distinto (lo dice en pantalla).

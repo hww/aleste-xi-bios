@@ -2,10 +2,10 @@
 # tests and uploads ready-to-use packages. A tag "alestelx-v*" also publishes
 # them as a GitHub release.
 #
-# The packages include LX.ROM (as boot.rom) and LXDOS.DSK from the MiSTer core
-# repository (CORE_REPO). For the Aleste 520EX mode, put the 520EX ROM
-# (AL512.BIN, MAME set al520ex, not distributed) next to boot.rom: the
-# emulator loads it by itself (or --rom520 file).
+# The packages are ready to use: boot.rom = LX.ROM (from the MiSTer core
+# repository, CORE_REPO) + emulator/roms/AL512.BIN (the 520EX ROM), as on the
+# MiSTer; LXDOS.DSK from the core repository; the 520EX disks and the test
+# tape from emulator/disks.
 name: alestelx emulator
 
 on:
@@ -38,18 +38,27 @@ jobs:
       - name: Unit tests (keyboard matrix)
         run: ctest --test-dir build --output-on-failure
 
-      - name: Get LX.ROM and LXDOS.DSK from the core repository
+      - name: boot.rom (LX.ROM + AL512.BIN), LXDOS.DSK and the 520EX disks
         run: |
           mkdir -p pkg
           base="https://raw.githubusercontent.com/$CORE_REPO/$CORE_BRANCH/sd"
-          curl -fsSL "$base/LX.ROM" -o pkg/boot.rom
+          curl -fsSL "$base/LX.ROM" -o LX.ROM
           curl -fsSL "$base/LXDOS.DSK" -o pkg/LXDOS.DSK
+          cat LX.ROM emulator/roms/AL512.BIN > pkg/boot.rom
+          test "$(stat -c %s pkg/boot.rom)" -eq 131072
+          cp emulator/disks/*.dsk emulator/disks/*.CDT pkg/
 
       - name: Smoke test (boot LX-DOS, headless)
         run: |
           ./build/alestelx --headless --ms 2500 -a pkg/LXDOS.DSK \
             --type "1200:ver|" --shot smoke.ppm pkg/boot.rom
           test -s smoke.ppm
+
+      - name: Smoke test (Aleste 520EX mode, CPC BASIC)
+        run: |
+          ./build/alestelx --headless --ms 9000 --boot amstrad \
+            --type "1200:520ex|" --shot smoke520.ppm pkg/boot.rom
+          test -s smoke520.ppm
 
       - name: GDB server test
         run: |
@@ -66,6 +75,8 @@ jobs:
           cp emulator/lx/README.md emulator/lx/USAGE.md emulator/lx/USAGE.es.md \
              emulator/lx/GDB.md emulator/lx/GDB.es.md pkg/
           cp emulator/tests/gdb_rsp_test.py emulator/tools/make_cdt.py pkg/
+          cp emulator/roms/README.md pkg/ROMS.md
+          cp emulator/disks/README.md pkg/DISKS.md
           # keep the execute bits: upload a tarball
           tar -C pkg -czf alestelx-linux.tar.gz .
 
@@ -112,9 +123,16 @@ jobs:
           Copy-Item emulator\lx\README.md, emulator\lx\USAGE.md, emulator\lx\USAGE.es.md, `
                     emulator\lx\GDB.md, emulator\lx\GDB.es.md pkg\
           Copy-Item emulator\tests\gdb_rsp_test.py, emulator\tools\make_cdt.py pkg\
+          Copy-Item emulator\roms\README.md pkg\ROMS.md
+          Copy-Item emulator\disks\README.md pkg\DISKS.md
+          Copy-Item emulator\disks\*.dsk, emulator\disks\*.CDT pkg\
           $base = "https://raw.githubusercontent.com/$env:CORE_REPO/$env:CORE_BRANCH/sd"
-          Invoke-WebRequest "$base/LX.ROM" -OutFile pkg\boot.rom
+          Invoke-WebRequest "$base/LX.ROM" -OutFile LX.ROM
           Invoke-WebRequest "$base/LXDOS.DSK" -OutFile pkg\LXDOS.DSK
+          # boot.rom = LX.ROM + AL512.BIN, as on the MiSTer
+          $rom = [IO.File]::ReadAllBytes("$PWD\LX.ROM") + [IO.File]::ReadAllBytes("$PWD\emulator\roms\AL512.BIN")
+          if ($rom.Length -ne 131072) { throw "boot.rom: $($rom.Length) bytes" }
+          [IO.File]::WriteAllBytes("$PWD\pkg\boot.rom", $rom)
 
       - name: Smoke test (boot LX-DOS, headless)
         shell: pwsh
