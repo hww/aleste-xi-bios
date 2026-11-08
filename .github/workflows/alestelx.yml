@@ -10,8 +10,11 @@ name: alestelx emulator
 
 on:
   push:
-    paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
+    # with a tags filter, branches must be listed too, or branch pushes are
+    # ignored (the paths filter doesn't apply to tags)
+    branches: [ '**' ]
     tags: [ 'alestelx-v*' ]
+    paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
   pull_request:
     paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
   workflow_dispatch:
