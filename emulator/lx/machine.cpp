@@ -94,8 +94,14 @@ uint32_t Machine::translate(uint16_t addr) const {
 uint8_t Machine::mread(uint16_t addr, int m1) {
     if (legacy()) return mem[leg_translate(addr, false)];
     if (m1) {
-        if (exit_pending) { supervisor = false; exit_pending = false; }
-        if (!supervisor && (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066)) supervisor = true;
+        // como mmu_native.sv: la entrada por una trampa tiene prioridad sobre
+        // la salida pendiente (que se hace en el M1 siguiente). Trampas: 0038h
+        // y 0066h (bit 2) y la llamada al sistema RST 6, 0030h (bit 3,
+        // provisional; aqui siempre en modo nativo: legacy() ya ha vuelto)
+        bool trap = ((mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066)) ||
+                    ((mmu_control & 0x08) && addr == 0x0030);
+        if (!supervisor && trap) { supervisor = true; exit_pending = false; }
+        else if (exit_pending) { supervisor = false; exit_pending = false; }
     }
     uint32_t p = translate(addr);
     if (p >= 0xFF0000) return 0xFF;                     // MMIO no se ve como memoria
@@ -129,7 +135,7 @@ void Machine::mmu_write(uint8_t r, uint8_t v) {
         if (!(v & 1) && supervisor) exit_pending = true;  // sale en el siguiente M1
         break;
     case 0xF1: mmu_page = v & 0x7F; break;
-    case 0xF2: supervisor = true; break;                  // llamada al sistema
+    // F2h era la llamada al sistema por puerto: se ha quitado (es RST 6)
     case 0xF3: mmu_clock = v; break;
     case 0xFA: slot_super = v; break;
     case 0xFB: slot_user = v; break;
@@ -151,7 +157,6 @@ uint8_t Machine::pread(uint16_t port) {
 void Machine::pwrite(uint16_t port, uint8_t v) {
     if (legacy()) { leg_pwrite(port, v); return; }
     uint8_t p = port & 0xFF;
-    if (p == 0xF2) { supervisor = true; return; }
     if (!supervisor && (mmu_control & 0x10)) return;
     if (p < 0x80) mmio_write(0xFF0000 + mmu_page * 128 + p, v);
     else if (p >= 0xE0) mmu_write(p, v);
