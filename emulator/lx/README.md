@@ -75,6 +75,17 @@ tape loading.
 
 Not yet in native mode: IPC and the graphics accelerator.
 
+## Automatic builds
+
+`.github/workflows/alestelx.yml` builds the emulator on every push or pull
+request that touches `emulator/`: Linux (Ubuntu, SDL2) and Windows (Visual
+Studio 2022 + vcpkg, through `CMakePresets.json`). It runs the keyboard
+matrix test, a headless LX-DOS boot and the GDB server test, and uploads
+both packages as artifacts (Actions tab > run > Artifacts), with LX.ROM and
+LXDOS.DSK taken from the MiSTer core repository. Pushing a tag
+`alestelx-v*` (e.g. `alestelx-v0.1`) also publishes them as a release. For
+the 520EX mode, append the 520EX ROM (AL512.BIN) to boot.rom.
+
 ## Launchers
 
 `launchers/` has ready-made scripts for each use, as `.bat` (Windows) and

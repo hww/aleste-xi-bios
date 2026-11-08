@@ -47,5 +47,8 @@
 bin
 build
 out
-outputemulator/build/
+output
+
+# alestelx (emulator/): build folders
+emulator/build*/
 build-vs/
