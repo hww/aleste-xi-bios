@@ -15,7 +15,7 @@
 //   b pg:NN            al ejecutar cualquier cosa de la pagina fisica NN (16 KB)
 //   bl                 lista                bc n | bc all  borrar
 //   disk a|b fichero   cambiar el disco        eject a|b   expulsar
-//   hist [n]           las ultimas n instrucciones ejecutadas (hasta 256)
+//   hist [n]           las ultimas n instrucciones ejecutadas, con su SP (hasta 262144)
 //   sym fichero.map    cargar simbolos      q        salir
 // Las direcciones van en hexadecimal (C000, 0xC000, $C000) o por simbolo.
 #pragma once
@@ -62,8 +62,10 @@ private:
     int  temp_bp = -1;                          // para "n"
     uint16_t resume_pc = 0;                      // no parar en el mismo sitio al seguir
     bool resuming = false;
-    uint16_t hist_pc[256] = {};
-    uint32_t hist_ph[256] = {};
+    static const int HIST_N = 1 << 18;                 // 262144 instrucciones (en el monton)
+    std::vector<uint16_t> hist_pc = std::vector<uint16_t>(HIST_N);
+    std::vector<uint16_t> hist_sp = std::vector<uint16_t>(HIST_N);
+    std::vector<uint32_t> hist_ph = std::vector<uint32_t>(HIST_N);
     int      hist_n = 0;
     std::map<uint16_t, std::string> sym_by_addr;
     std::map<std::string, uint16_t> addr_by_sym;

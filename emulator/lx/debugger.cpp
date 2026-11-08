@@ -52,7 +52,8 @@ void Debugger::continue_run() {
 
 bool Debugger::check(uint16_t pc) {
     if (pause) return true;
-    hist_pc[hist_n & 255] = pc; hist_ph[hist_n & 255] = m.cpu_phys(pc); hist_n++;
+    int hi = hist_n & (HIST_N - 1);
+    hist_pc[hi] = pc; hist_sp[hi] = (uint16_t)z80ex_get_reg(m.cpu, regSP); hist_ph[hi] = m.cpu_phys(pc); hist_n++;
     if (resuming) { resuming = false; if (pc == resume_pc) return false; }
     bool hit = false;
     if (temp_bp >= 0 && pc == temp_bp) { temp_bp = -1; hit = true; }
@@ -276,14 +277,14 @@ void Debugger::exec(const std::string& line) {
         else if (c == "eject") m.fdc.eject(d);
         else printf(m.fdc.mount(d, a2) ? "Drive %c: %s\n" : "Cannot mount %c: %s\n", 'A' + d, a2.c_str());
     } else if (c == "hist") {
-        n = a1.empty() ? 32 : std::min(256, atoi(a1.c_str()));
+        n = a1.empty() ? 32 : std::min(HIST_N, atoi(a1.c_str()));
         n = std::min(n, hist_n);
         for (int i = hist_n - n; i < hist_n; i++) {
             char out[64];
             int t1, t2;
-            PhysRead pr{&m, hist_pc[i & 255], hist_ph[i & 255]};
+            PhysRead pr{&m, hist_pc[i & (HIST_N - 1)], hist_ph[i & (HIST_N - 1)]};
             z80ex_dasm(out, sizeof(out), 0, &t1, &t2, dasm_read_phys, pr.pc, &pr);
-            printf("  %04X  %06X  %s\n", pr.pc, pr.ph, out);
+            printf("  %04X  %06X  %-22s SP=%04X\n", pr.pc, pr.ph, out, hist_sp[i & (HIST_N - 1)]);
         }
     } else if (c == "sym") {
         load_symbols(a1);

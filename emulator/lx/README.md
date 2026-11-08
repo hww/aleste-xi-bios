@@ -190,6 +190,7 @@ and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
+| SYSTEST.COM (`tests/systest.asm`): RST 6 syscalls from user mode, keys pressed during its 1 s wait | same result as the core in simulation: 1011 calls, 8 interrupts taken in user mode, private and shared pages OK; 1511 cycles per null call |
 | VIEW.COM and TUNNEL.COM on LXDOS.DSK (LX-DOS graphics, AlesteLX_MiSTer) | the four sample .LXI images; the tunnel with its rotating palette |
 | GDB server (`tests/gdb_rsp_test.py`) | target.xml, registers, memory (logical and physical), breakpoint at `_main`, continue, step, monitor, Ctrl-C and kill |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
