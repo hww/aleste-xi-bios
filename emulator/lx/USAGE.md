@@ -17,7 +17,7 @@ hardware description, so what works in the emulator works on the MiSTer.
 | `alestelx-linux` | the emulator for Linux |
 | `boot.rom` | the ROM: LX BIOS followed by the 520EX ROM (the same file as `games/AlesteLX/boot.rom` on the MiSTer) |
 | `LXDOS.DSK` | LX-DOS boot disk, with test programs, the image viewer, the demos and sample images |
-| `alestedos-dev.dsk`, `mag-player.dsk` | 520EX disks: MSX-DOS with development tools, and the MAG player with its songs |
+| `ALESTDOS_TIME.dsk`, `mag-player.dsk` | 520EX disks: MSX-DOS with development tools, and the MAG player with its songs |
 | `TAPEOK.CDT` | a small test tape for the CPC mode |
 | `*.bat`, `*.sh` | launchers for each use (Windows / Linux) |
 | `bios.map`, `lxdos.map` | symbols for the debugger |
@@ -53,8 +53,8 @@ argument is passed to the emulator (e.g. `alestelx.bat --scale 4`).
 | `alestelx-debug` | starts paused with the debugger in the terminal (type `help` there) |
 | `alestelx-gdb` | GDB server on port 2159 for GDB or DeZog (see `GDB.md`) |
 | `alestelx-520ex-basic` | 520EX in AMSTRAD mode: type `520ex` at the LX monitor and you get CPC BASIC |
-| `alestelx-520ex-msxdos` | 520EX booting MSX-DOS from `alestedos-dev.dsk` (type `520ex` at the LX monitor) |
-| `alestelx-520ex-mag` | 520EX with `mag-player.dsk`: then `mag axelf` (also sll1, chrush, headache, techno1) |
+| `alestelx-520ex-msxdos` | 520EX booting MSX-DOS from `ALESTDOS_TIME.dsk` (type `520ex` at the LX monitor) |
+| `alestelx-520ex-mag` | 520EX booting MSX-DOS from `ALESTDOS_TIME.dsk`, with `mag-player.dsk` in drive B: then `b:` and `mag axelf` (also sll1, chrush, headache, techno1) |
 | `alestelx-520ex-tape` | CPC BASIC with `TAPEOK.CDT`: `\|TAPE`, then `RUN"` and a key |
 
 ## 3. Keys of the emulator window
@@ -145,10 +145,15 @@ The LX also contains the whole 520EX. To enter it: go to the ROM monitor
 (no system disk, or `MONITOR` in LX-DOS) and type **`520ex`**. F12 (reset)
 goes back to the LX.
 
-- With **`alestedos-dev.dsk`** in drive A, the 520EX boots **MSX-DOS 1.04**
+- With **`ALESTDOS_TIME.dsk`** in drive A, the 520EX boots **MSX-DOS 1.04**
   (FOTON BIOS, COMMAND 2.2A): `dir`, M80/L80, PW and the other tools.
-- With **`mag-player.dsk`**: `mag axelf` plays Scream Tracker songs through
-  the 520EX MagicSound (also `sll1`, `chrush`, `headache`, `techno1`).
+- With **`mag-player.dsk`** in drive B: `b:` and `mag axelf` play Scream
+  Tracker songs through the 520EX MagicSound (also `sll1`, `chrush`,
+  `headache`, `techno1`). `ALESTDOS_TIME.dsk` has the MSX-DOS for **two
+  drives** (see `DISKS.md`); with a one-drive MSX-DOS, B: is a "phantom"
+  drive that asks to swap the disk in A. `mag-player.dsk` can also
+  boot by itself, but its MSX-DOS prints the prompt in black on black: type
+  `mag axelf` blind.
 - With **`--boot amstrad`** (the `alestelx-520ex-basic` launcher), Shift is
   held for 2.5 s after the switch and the 520EX SETUP starts in AMSTRAD
   mode: **CPC BASIC 1.1**.
