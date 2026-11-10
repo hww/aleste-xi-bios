@@ -52,3 +52,6 @@ output
 # alestelx (emulator/): build folders
 emulator/build*/
 build-vs/
+emulator/lx/gpu/sim
+emulator/lx/gpu/*.o
+.vscode/
