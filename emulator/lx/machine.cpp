@@ -14,6 +14,10 @@
 #include <algorithm>
 
 namespace lx {
+#include "kbdmatrix.inc"
+}
+
+namespace lx {
 
 // ---------------------------------------------------------------- z80ex
 static Z80EX_BYTE cb_mread(Z80EX_CONTEXT*, Z80EX_WORD a, int m1, void* u)   { return ((Machine*)u)->mread(a, m1); }
@@ -22,7 +26,13 @@ static Z80EX_BYTE cb_pread(Z80EX_CONTEXT*, Z80EX_WORD p, void* u)           { re
 static void       cb_pwrite(Z80EX_CONTEXT*, Z80EX_WORD p, Z80EX_BYTE v, void* u) { ((Machine*)u)->pwrite(p, v); }
 static Z80EX_BYTE cb_intread(Z80EX_CONTEXT*, void* u)                       { return ((Machine*)u)->intread(); }
 
-Machine::Machine() : mem(MEM_SIZE, 0), fb(SCREEN_W * SCREEN_H, 0xFF000000) {
+Machine::Machine() 
+   : mem(MEM_SIZE, 0),
+      fb(SCREEN_W * SCREEN_H, 0xFF000000),
+      gpu_mem_(mem.data(), MEM_SIZE),   // ← attach к mem
+      gpu_(gpu_mem_),
+      gpu_mmio_(gpu_)
+{
     cpu = z80ex_create(cb_mread, this, cb_mwrite, this, cb_pread, this, cb_pwrite, this, cb_intread, this);
     reset();
 }
@@ -48,6 +58,19 @@ bool Machine::load_boot_rom(const std::string& path) {
     size_t a = std::min<size_t>(n, 0x10000);
     memcpy(&mem[ROM_BASE], d.data(), a);
     if (n > 0x10000) memcpy(&mem[ROM2_BASE], d.data() + 0x10000, n - 0x10000);
+    has_rom520 = n > 0x10000;
+    return true;
+}
+
+// La ROM del 520EX en un fichero aparte (AL512.BIN, 64 KB): donde la pondria
+// el cargador del core si fuera detras de LX.ROM en boot.rom
+bool Machine::load_rom520(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    size_t n = fread(&mem[ROM2_BASE], 1, 0x10000, f);
+    fclose(f);
+    if (n == 0) return false;
+    has_rom520 = true;
     return true;
 }
 
@@ -58,7 +81,7 @@ void Machine::reset() {
     supervisor = true; exit_pending = false;
     pic_mask = pic_pending = 0; pic_vector = 0; irq_lines = irq_prev = 0;
     tmr_ctrl = 0; tmr_reload = tmr_count = tmr_ticks = 0;
-    rtc_ram[11] = 0x02;                                 // 24 h, BCD
+    rtc_ram[10] = 0x26; rtc_ram[11] = 0x06;             // como el core: binario, 24 h
     pal_index = pal_ctrl = pal_mod = 0; border = 0x888;
     memset(crtc, 0, sizeof(crtc));
     crtc[0] = 63; crtc[1] = 40; crtc[6] = 25; crtc[9] = 7;
@@ -67,7 +90,10 @@ void Machine::reset() {
     ms2_ctrl = 0; ms2_vol_l = ms2_vol_r = 255; ms2_irq_ctrl = ms2_irq_stat = 0;
     ms2_tmr_period = ms2_tmr_cnt = 0;
     kq.clear(); kq_ovf = false; kin_ctrl = 0;
+    memset(kmatrix, 0, sizeof(kmatrix));
     fdc.reset();
+    leg_reset();
+    leg_since = 0; leg_key = false;
     stop_reason.clear();
     z80ex_reset(cpu);
 }
@@ -85,9 +111,13 @@ uint32_t Machine::translate(uint16_t addr) const {
 }
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
+    if (legacy()) return mem[leg_translate(addr, false)];
     if (m1) {
-        if (exit_pending) { supervisor = false; exit_pending = false; }
-        if (!supervisor && (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066)) supervisor = true;
+        // como mmu_native.sv: la entrada por una trampa (0038h/0066h, bit 2)
+        // tiene prioridad sobre la salida pendiente (en el M1 siguiente)
+        bool trap = (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066);
+        if (!supervisor && trap) { supervisor = true; exit_pending = false; }
+        else if (exit_pending) { supervisor = false; exit_pending = false; }
     }
     uint32_t p = translate(addr);
     if (p >= 0xFF0000) return 0xFF;                     // MMIO no se ve como memoria
@@ -95,6 +125,7 @@ uint8_t Machine::mread(uint16_t addr, int m1) {
 }
 
 void Machine::mwrite(uint16_t addr, uint8_t v) {
+    if (legacy()) { mem[leg_translate(addr, true)] = v; return; }
     uint32_t p = translate(addr);
     if (p < 0xFF0000) mem[p] = v;
 }
@@ -131,6 +162,7 @@ void Machine::mmu_write(uint8_t r, uint8_t v) {
 }
 
 uint8_t Machine::pread(uint16_t port) {
+    if (legacy()) return leg_pread(port);
     uint8_t p = port & 0xFF;
     if (!supervisor && (mmu_control & 0x10)) return 0xFF;
     if (p < 0x80) return mmio_read(0xFF0000 + mmu_page * 128 + p);
@@ -139,7 +171,10 @@ uint8_t Machine::pread(uint16_t port) {
 }
 
 void Machine::pwrite(uint16_t port, uint8_t v) {
+    if (legacy()) { leg_pwrite(port, v); return; }
     uint8_t p = port & 0xFF;
+    // llamada al sistema: antes del bloqueo de puertos del usuario, como en
+    // mmu_native.sv (OUT (F2h),A entra al supervisor aunque esten bloqueados)
     if (p == 0xF2) { supervisor = true; return; }
     if (!supervisor && (mmu_control & 0x10)) return;
     if (p < 0x80) mmio_write(0xFF0000 + mmu_page * 128 + p, v);
@@ -184,8 +219,11 @@ static uint8_t to_bcd(int v) { return (uint8_t)(((v / 10) << 4) | (v % 10)); }
 static int from_bcd(uint8_t v) { return (v >> 4) * 10 + (v & 15); }
 
 uint8_t Machine::rtc_read(uint8_t r) {
+    int64_t now = (int64_t)time(nullptr);
+    if (now != rtc_last_sec) { rtc_last_sec = now; rtc_uf = true; }  // una actualizacion por segundo
     if (r >= 10) {
         if (r == 10) return rtc_ram[10] & 0x7F;            // sin UIP
+        if (r == 12) { uint8_t v = rtc_uf ? 0x10 : 0; rtc_uf = false; return v; }   // UF, se borra al leer
         if (r == 13) return 0x80;                           // VRT: pila bien
         return rtc_ram[r];
     }
@@ -199,14 +237,18 @@ uint8_t Machine::rtc_read(uint8_t r) {
     case 6: v = tm.tm_wday + 1; break;
     case 7: v = tm.tm_mday; break;
     case 8: v = tm.tm_mon + 1; break;
-    case 9: v = tm.tm_year % 100; break;
+    case 9: v = tm.tm_year + 1900 - 1980; break;        // anos desde 1980 (SETUP del 520EX, core)
     default: return rtc_ram[r];                             // alarmas
     }
     return (rtc_ram[11] & 0x04) ? (uint8_t)v : to_bcd(v);
 }
 
 void Machine::rtc_write(uint8_t r, uint8_t v) {
-    if (r >= 10 || r == 1 || r == 3 || r == 5) { rtc_ram[r] = v; return; }
+    if (r >= 10 || r == 1 || r == 3 || r == 5) {
+        if (r >= 10 && rtc_ram[r] != v) cmos_dirty = true;
+        rtc_ram[r] = v;
+        return;
+    }
     int val = (rtc_ram[11] & 0x04) ? v : from_bcd(v);
     time_t now = time(nullptr);
     time_t t = now + rtc_offset;
@@ -218,10 +260,32 @@ void Machine::rtc_write(uint8_t r, uint8_t v) {
     case 6: return;
     case 7: tm.tm_mday = val; break;
     case 8: tm.tm_mon = val - 1; break;
-    case 9: tm.tm_year = 100 + val; break;
+    case 9: tm.tm_year = 80 + val; break;
     }
     tm.tm_isdst = -1;
     rtc_offset = (int64_t)mktime(&tm) - (int64_t)now;
+}
+
+bool Machine::load_cmos(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    uint8_t buf[64];
+    size_t n = fread(buf, 1, 64, f);
+    fclose(f);
+    if (n < 64) return false;
+    for (int i = 10; i < 64; i++) rtc_ram[i] = buf[i];      // la hora es la del PC
+    cmos_dirty = false;
+    return true;
+}
+
+bool Machine::save_cmos(const std::string& path) const {
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) return false;
+    uint8_t buf[64] = {};                                   // 0-9: la hora no se guarda
+    for (int i = 10; i < 64; i++) buf[i] = rtc_ram[i];
+    fwrite(buf, 1, 64, f);
+    fclose(f);
+    return true;
 }
 
 // ---------------------------------------------------------------- DMA
@@ -332,9 +396,11 @@ void Machine::ms2_tick() {
         out_l = ((acc_l >> 10) * ms2_vol_l) >> 8;
         out_r = ((acc_r >> 10) * ms2_vol_r) >> 8;
     }
-    // como en el core: la MS2 entra a la mitad en la mezcla de audio
-    audio_buf.push_back((int16_t)std::clamp(out_l >> 1, -32768, 32767));
-    audio_buf.push_back((int16_t)std::clamp(out_r >> 1, -32768, 32767));
+    // como en el core: la MS2 entra a la mitad en la mezcla, con el AY
+    int ay_l = 0, ay_r = 0;
+    if (legacy()) ay_sample(ay_l, ay_r);
+    audio_buf.push_back((int16_t)std::clamp((out_l >> 1) + ay_l, -32768, 32767));
+    audio_buf.push_back((int16_t)std::clamp((out_r >> 1) + ay_r, -32768, 32767));
 
     if (ms2_tmr_period) {
         if (ms2_tmr_cnt <= 1) { ms2_tmr_cnt = ms2_tmr_period; if (ms2_irq_ctrl & 2) ms2_irq_stat |= 2; }
@@ -358,7 +424,15 @@ void Machine::ms2_tick() {
 }
 
 // ---------------------------------------------------------------- teclado
+// Cola de eventos (lo que lee la BIOS) y matriz del 520EX/CPC (para juegos),
+// como lx_input.sv y kbd_520ex.sv
 void Machine::key_event(uint8_t code, bool pressed, bool extended) {
+    for (auto& k : kbd_matrix_keys)
+        if (k.code == code && k.ext == (extended ? 1 : 0)) {
+            if (pressed) kmatrix[k.row] |= 1 << k.bit; else kmatrix[k.row] &= ~(1 << k.bit);
+            if (k.fshift) kfshift = pressed;
+        }
+    if (pressed) leg_key = true;
     if (kq.size() >= 16) { kq_ovf = true; return; }
     kq.push_back({code, pressed, extended});
 }
@@ -401,6 +475,7 @@ uint8_t Machine::mmio_read(uint32_t a) {
         case 0x21: return crtc[crtc_idx & 31];
         }
         return 0xFF;
+    case 3: return gpu_mmio_.read(r);   // ← GPU        
     case 6:
         if (r == 0x00) return dma_ctrl & 0x0E;                 // nunca ocupada: se hace al momento
         if (r == 0x01) return dma_done;
@@ -415,7 +490,11 @@ uint8_t Machine::mmio_read(uint32_t a) {
         case 0x03: return kin_ctrl;
         case 0x04: return layout_es ? 1 : 0;
         }
-        if (r >= 0x10 && r <= 0x1A) return 0xFF;               // matriz: nada pulsado (por ahora)
+        if (r >= 0x10 && r <= 0x1A) {                          // matriz, activo a 0 (cols2)
+            uint8_t k = kmatrix[r - 0x10];
+            if (r == 0x19) k |= joy;
+            return ~k;
+        }
         return 0xFF;
     case 9:
         if (r == 0x00) return fdc.read_status();
@@ -463,6 +542,7 @@ void Machine::mmio_write(uint32_t a, uint8_t v) {
         case 0x21: crtc[crtc_idx & 31] = v; break;
         }
         break;
+    case 3: gpu_mmio_.write(r, v); break;   // ← GPU        
     case 6:
         if (r == 0x00) { if (v & 1) dma_start(v); else dma_ctrl = v & 0x0F; }
         else if (r == 0x01) { if (v & 1) dma_done = false; }
@@ -483,59 +563,114 @@ uint32_t Machine::rgb12(uint16_t c) const {
     return 0xFF000000 | (r * 17 << 16) | (g * 17 << 8) | (b * 17);
 }
 
-// Modos lineales del CRTC del LX: R18 bits 1-0 = bits por pixel (00 1, 01 2,
-// 10 4), R19 = byte alto de la direccion, R12/R13 = inicio (en palabras),
-// R1 = bytes por linea / 2, R6 * (R9 + 1) = lineas
+// Video nativo, como mc6845mod.sv + pixel_pipeline.sv:
+//   R18 bits 1-0 = bits por pixel (00 1, 01 2, 10 4, 11 8)
+//   R20 bit 0 = direccion lineal (R19:R12:R13, en bytes, seguida de linea en
+//       linea); bit 1 paso de 4 bytes (si no, 2); bit 2 dos pasos por caracter
+//   R21 bits 1-0 = bytes por caracter: 00 2, 01 4, 10 8, 11 16
+//   cada caracter son 16 pixeles de la salida (720x480); cada linea del CRTC
+//   se ve dos veces. R1 = caracteres por linea, R6 * (R9 + 1) = lineas.
+//   Sin R20 bit 0, direcciones del CPC: R19, MA13-12, RA2-0, MA9-0, 0.
 void Machine::render() {
+    if (legacy()) return;                                       // legacy: leg_fb, al acabar cada cuadro
     uint32_t bc = rgb12(border);
     std::fill(fb.begin(), fb.end(), bc);
-    int bpp_sel = crtc[0x12] & 3;
-    int bpp = bpp_sel == 0 ? 1 : bpp_sel == 1 ? 2 : 4;
-    uint32_t stride = crtc[1] * 2;
+    int bpp = 1 << (crtc[0x12] & 3);
+    int chars = crtc[1];
     int lines = crtc[6] * ((crtc[9] & 31) + 1);
-    if (!stride || !lines) return;
-    uint32_t base = ((uint32_t)crtc[0x13] << 16) + ((((crtc[12] & 0x3F) << 8) | crtc[13]) << 1);
-    int width = stride * 8 / bpp;
-    int sx = std::max(1, SCREEN_W / width);
-    int sy = std::max(1, SCREEN_H / std::max(1, lines));
-    int ox = (SCREEN_W - width * sx) / 2, oy = (SCREEN_H - lines * sy) / 2;
-    for (int y = 0; y < lines && y * sy < SCREEN_H; y++) {
-        const uint8_t* row = &mem[(base + y * stride) & 0xFFFFFF];
-        for (int x = 0; x < width; x++) {
-            int bit = x * bpp;
-            uint8_t byte = row[bit >> 3];
-            int idx = (byte >> (8 - bpp - (bit & 7))) & ((1 << bpp) - 1);
-            uint32_t c = rgb12(palette[idx]);
-            for (int yy = 0; yy < sy; yy++) {
-                uint32_t* p = &fb[(oy + y * sy + yy) * SCREEN_W + ox + x * sx];
-                for (int xx = 0; xx < sx; xx++) p[xx] = c;
+    if (!chars || !lines) return;
+    bool linear = crtc[0x14] & 1;
+    int bytes_char = 2 << (crtc[0x15] & 3);
+    int px_char = bytes_char * 8 / bpp;                         // pixeles por caracter
+    if (px_char > 16) px_char = 16;                             // el pipeline no da mas de 16
+    int width = chars * px_char;
+    // la salida: 16 pixeles por caracter en 640 (40 caracteres); lineas dobladas
+    double sx = 16.0 / px_char * (SCREEN_W / 640.0);
+    int sy = 2;
+    int out_w = (int)(width * sx), out_h = lines * sy;
+    int ox = (SCREEN_W - out_w) / 2, oy = (SCREEN_H - out_h) / 2;
+    uint32_t start = ((crtc[12] & 0x3F) << 8) | crtc[13];
+    uint32_t lin_step = linear ? (uint32_t)((crtc[0x14] & 4 ? 2 : 1) * (crtc[0x14] & 2 ? 4 : 2)) : 2;
+    for (int y = 0; y < lines; y++) {
+        int row = y / ((crtc[9] & 31) + 1), ra = y % ((crtc[9] & 31) + 1);
+        for (int c = 0; c < chars; c++) {
+            uint32_t a;
+            if (linear) a = ((uint32_t)crtc[0x13] << 16) + ((start + (uint32_t)(y * chars + c) * lin_step) & 0xFFFF);
+            else {
+                uint16_t ma = (uint16_t)(start + row * chars + c);
+                a = ((uint32_t)crtc[0x13] << 16) | (((ma >> 12) & 3) << 14) | ((ra & 7) << 11) | ((ma & 0x3FF) << 1);
+            }
+            for (int p = 0; p < px_char; p++) {
+                int bit = p * bpp;
+                uint8_t byte = mem[(a + (bit >> 3)) & 0xFFFFFF];
+                int idx = bpp == 8 ? byte : (byte >> (8 - bpp - (bit & 7))) & ((1 << bpp) - 1);
+                uint32_t col = rgb12(palette[idx]);
+                int x0 = ox + (int)((c * px_char + p) * sx), x1 = ox + (int)((c * px_char + p + 1) * sx);
+                for (int yy = 0; yy < sy; yy++) {
+                    int yo = oy + y * sy + yy;
+                    if (yo < 0 || yo >= SCREEN_H) continue;
+                    uint32_t* line = &fb[yo * SCREEN_W];
+                    for (int x = std::max(0, x0); x < std::min(SCREEN_W, x1); x++) line[x] = col;
+                }
             }
         }
     }
 }
 
 // ---------------------------------------------------------------- bucle
-bool Machine::run_frame() {
-    if (!stop_reason.empty()) return false;
+int Machine::step() {
     double hz = cpu_hz();
-    double frame_cycles = hz / 60.0;
-    double us_cycles = hz / 1e6, smp_cycles = hz / AUDIO_RATE;
-    while (frame_acc < frame_cycles) {
-        if (legacy()) {
-            stop_reason = "legacy (520EX/CPC) mode is not emulated yet";
-            return false;
-        }
+    int t = 0;
+    if (legacy() && !was_legacy) { leg_since = 0; leg_key = false; }   // entrada en el 520EX
+    was_legacy = legacy();
+    if (legacy()) {
+        // la INT es la del Gate Array; al reconocerla se borra y se quita el
+        // bit 5 del contador (como el 40010)
+        if (ms.nmi && !z80ex_last_op_type(cpu) && z80ex_nmi_possible(cpu)) { ms.nmi = false; t = z80ex_nmi(cpu); }
+        else if (ga_irq && z80ex_int_possible(cpu) && (t = z80ex_int(cpu)) > 0) { ga_irq = false; irq_cnt &= 0x1F; leg_irqs++; }
+        else t = z80ex_step(cpu);
+        if (t <= 0) t = 4;
+        leg_time(t);
+        ms_time(t);
+        serial_time(t);
+        tape.run(t, 4e6, ppi_c & 0x10);
+        leg_since += t;
+    } else {
         pic_update();
-        int t;
         if ((pic_pending & pic_mask) && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
         else t = z80ex_step(cpu);
         if (t <= 0) t = 4;
-        cycles += t;
-        frame_acc += t;
-        us_acc += t;
-        if (us_acc >= us_cycles) { int n = (int)(us_acc / us_cycles); us_acc -= n * us_cycles; timer_us(n); }
-        sample_acc += t;
-        while (sample_acc >= smp_cycles) { sample_acc -= smp_cycles; ms2_tick(); }
+    }
+    // GPU Simple Update
+    bool gpu_irq = gpu_mmio_.irq();
+    if (gpu_irq != gpu_prev_irq_) {
+        set_line(5, gpu_irq);      // PIC line 5 (был IPC, свободен)
+        gpu_prev_irq_ = gpu_irq;
+    }
+
+    cycles += t;
+    frame_acc += t;
+    us_acc += t;
+    double us_cycles = hz / 1e6, smp_cycles = hz / AUDIO_RATE;
+    if (us_acc >= us_cycles) { int n = (int)(us_acc / us_cycles); us_acc -= n * us_cycles; timer_us(n); }
+    sample_acc += t;
+    while (sample_acc >= smp_cycles) { sample_acc -= smp_cycles; ms2_tick(); }
+
+    return t;
+}
+
+bool Machine::run_frame() {
+    break_hit = false;
+    if (!stop_reason.empty()) return false;
+    double frame_cycles = cpu_hz() / 60.0;
+    while (frame_acc < frame_cycles) {
+        // z80ex trata los prefijos como pasos sueltos: el depurador solo mira
+        // el principio de cada instruccion
+        if (break_check && !z80ex_last_op_type(cpu) && break_check(z80ex_get_reg(cpu, regPC))) {
+            break_hit = true;
+            return true;
+        }
+        step();
     }
     frame_acc -= frame_cycles;
     pic_pending |= 1u << 2;                                      // VBlank
