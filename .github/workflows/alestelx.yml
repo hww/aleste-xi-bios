@@ -1,0 +1,166 @@
+# Builds the alestelx emulator (emulator/) for Linux and Windows, runs its
+# tests and uploads ready-to-use packages. A tag "alestelx-v*" also publishes
+# them as a GitHub release.
+#
+# The packages are ready to use: boot.rom = LX.ROM (from the MiSTer core
+# repository, CORE_REPO) + emulator/roms/AL512.BIN (the 520EX ROM), as on the
+# MiSTer; LXDOS.DSK from the core repository; the 520EX disks and the test
+# tape from emulator/disks.
+name: alestelx emulator
+
+on:
+  push:
+    # with a tags filter, branches must be listed too, or branch pushes are
+    # ignored (the paths filter doesn't apply to tags)
+    branches: [ '**' ]
+    tags: [ 'alestelx-v*' ]
+    paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
+  pull_request:
+    paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
+  workflow_dispatch:
+
+env:
+  CORE_REPO: shaeon/AlesteLX_MiSTer
+  CORE_BRANCH: main
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+
+      - name: Configure
+        run: cmake -S emulator -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Unit tests (keyboard matrix)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: boot.rom (LX.ROM + AL512.BIN), LXDOS.DSK and the 520EX disks
+        run: |
+          mkdir -p pkg
+          base="https://raw.githubusercontent.com/$CORE_REPO/$CORE_BRANCH/sd"
+          curl -fsSL "$base/LX.ROM" -o LX.ROM
+          curl -fsSL "$base/LXDOS.DSK" -o pkg/LXDOS.DSK
+          cat LX.ROM emulator/roms/AL512.BIN > pkg/boot.rom
+          test "$(stat -c %s pkg/boot.rom)" -eq 131072
+          cp emulator/disks/*.dsk emulator/disks/*.CDT pkg/
+
+      - name: Smoke test (boot LX-DOS, headless)
+        run: |
+          ./build/alestelx --headless --ms 2500 -a pkg/LXDOS.DSK \
+            --type "1200:ver|" --shot smoke.ppm pkg/boot.rom
+          test -s smoke.ppm
+
+      - name: Smoke test (Aleste 520EX mode, CPC BASIC)
+        run: |
+          ./build/alestelx --headless --ms 9000 --boot amstrad \
+            --type "1200:520ex|" --shot smoke520.ppm pkg/boot.rom
+          test -s smoke520.ppm
+
+      - name: GDB server test
+        run: |
+          ./build/alestelx --headless --gdb 2159 -a pkg/LXDOS.DSK pkg/boot.rom &
+          sleep 1
+          # 0100h: the ROM's first jump target, the same in every build
+          timeout 60 python3 emulator/tests/gdb_rsp_test.py 2159 0100
+
+      - name: Package
+        run: |
+          cp build/alestelx pkg/alestelx-linux
+          cp emulator/launchers/*.sh pkg/
+          chmod +x pkg/*.sh pkg/alestelx-linux
+          cp emulator/lx/README.md emulator/lx/USAGE.md emulator/lx/USAGE.es.md \
+             emulator/lx/GDB.md emulator/lx/GDB.es.md pkg/
+          cp emulator/tests/gdb_rsp_test.py emulator/tools/make_cdt.py pkg/
+          cp emulator/roms/README.md pkg/ROMS.md
+          cp emulator/disks/README.md pkg/DISKS.md
+          # keep the execute bits: upload a tarball
+          tar -C pkg -czf alestelx-linux.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alestelx-linux
+          path: alestelx-linux.tar.gz
+
+  windows:
+    runs-on: windows-2022
+    env:
+      VCPKG_ROOT: C:\vcpkg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: C:\Users\runneradmin\AppData\Local\vcpkg\archives
+          key: vcpkg-sdl2-x64-windows-v1
+
+      - name: Install SDL2 (vcpkg)
+        run: vcpkg install sdl2:x64-windows
+
+      - name: Configure (CMakePresets.json, Visual Studio 2022 + vcpkg)
+        working-directory: emulator
+        run: cmake --preset default
+
+      - name: Build
+        working-directory: emulator
+        run: cmake --build --preset default
+
+      - name: Unit tests (keyboard matrix)
+        working-directory: emulator
+        run: ctest --test-dir build-vs -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force pkg | Out-Null
+          Copy-Item emulator\build-vs\Release\alestelx.exe pkg\
+          Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\SDL2.dll" pkg\
+          Copy-Item emulator\launchers\*.bat pkg\
+          Copy-Item emulator\lx\README.md, emulator\lx\USAGE.md, emulator\lx\USAGE.es.md, `
+                    emulator\lx\GDB.md, emulator\lx\GDB.es.md pkg\
+          Copy-Item emulator\tests\gdb_rsp_test.py, emulator\tools\make_cdt.py pkg\
+          Copy-Item emulator\roms\README.md pkg\ROMS.md
+          Copy-Item emulator\disks\README.md pkg\DISKS.md
+          Copy-Item emulator\disks\*.dsk, emulator\disks\*.CDT pkg\
+          $base = "https://raw.githubusercontent.com/$env:CORE_REPO/$env:CORE_BRANCH/sd"
+          Invoke-WebRequest "$base/LX.ROM" -OutFile LX.ROM
+          Invoke-WebRequest "$base/LXDOS.DSK" -OutFile pkg\LXDOS.DSK
+          # boot.rom = LX.ROM + AL512.BIN, as on the MiSTer
+          $rom = [IO.File]::ReadAllBytes("$PWD\LX.ROM") + [IO.File]::ReadAllBytes("$PWD\emulator\roms\AL512.BIN")
+          if ($rom.Length -ne 131072) { throw "boot.rom: $($rom.Length) bytes" }
+          [IO.File]::WriteAllBytes("$PWD\pkg\boot.rom", $rom)
+
+      - name: Smoke test (boot LX-DOS, headless)
+        shell: pwsh
+        working-directory: pkg
+        run: |
+          .\alestelx.exe --headless --ms 2500 -a LXDOS.DSK --type "1200:ver|" --shot ..\smoke.ppm boot.rom
+          if (-not (Test-Path ..\smoke.ppm)) { throw "no screenshot" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alestelx-windows
+          path: pkg/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/alestelx-v')
+    needs: [ linux, windows ]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Zip the Windows package
+        run: cd alestelx-windows && zip -r ../alestelx-windows.zip .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            alestelx-windows.zip
+            alestelx-linux/alestelx-linux.tar.gz
