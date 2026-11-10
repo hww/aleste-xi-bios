@@ -54,3 +54,6 @@ output/
 # Personal settings
 .vscode/
 
+# Simulator binary
+sim
+sim-debug
