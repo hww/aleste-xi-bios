@@ -77,21 +77,30 @@ aleste-xi-bios/
 ├── drivers/             Driver implementations (assembly)
 │   ├── audio/           AY-8910 driver
 │   ├── crtc/            CRTC driver and video modes
+│   ├── dma/             DMA blitter (all drawing goes through it)
+│   ├── fdc/             uPD765 floppy controller
+│   ├── int/             Interrupt dispatcher for the native PIC (IM 1)
+│   ├── kbd/             PS/2 keyboard
 │   ├── mmu/             Memory management unit driver
 │   ├── palette/         12-bit palette driver
-│   ├── vbuf/            Video buffer driver
+│   ├── snd/             Magic Sound 2
+│   ├── timer/           System timer
+│   ├── vbuf/            Video buffer driver (640x200x2, 320x200x256)
 │   └── video/           Video composition
 ├── fonts/               Bitmap fonts (Windows-1252)
 ├── inc/                 Assembly includes (bios/, drivers/, hardware/)
 ├── include/             C headers (bios/, drivers/, hardware/)
-├── src/drivers/         C-side driver wrappers and stubs
+├── src/                 Console, FAT12, MOD player, boot tune
+├── src/drivers/         C-side driver wrappers
+├── dos/                 LX-DOS (loaded from floppy as LXDOS.SYS) and its test programs
+├── tools/               Floppy image, LXI image and test MOD generators (Python)
 ├── services/            Higher-level services (console, filesystem, players) — planned
 ├── emulator/            Virtual platform and debugger
 │   ├── src/             CPU, MMU, CRTC, palette, ports, screen, debugger
 │   └── test/            Minimal test ROM and build script
 ├── deps/z80ex/          Bundled Z80 CPU emulation library
-├── output/aleste.bin    Assembled 64 KB BIOS image
-└── main.c               Example application
+├── output/              LX.ROM (64 KB), bios_abi.asm, LXDOS.SYS (built)
+└── main.c               The ROM monitor
 ```
 
 ## Documentation
@@ -177,65 +186,73 @@ cd ~/projects/hww/_z80/aleste-xi-bios/emulator
 make clean && make
 ```
 
-### 2. Build the Aleste BIOS Image
+### 2. Build the BIOS (LX.ROM) and LX-DOS (LXDOS.SYS)
 
-Navigate to the project root and ensure that the project's `Makefile` points to your local Z88DK installation.
+From the project root. `Z88DK_PATH` defaults to the path in the `Makefile`;
+set it on the command line if yours is different (or leave `zcc` in the PATH).
 
 ```bash
 cd ~/projects/hww/_z80/aleste-xi-bios
-
-# Update Z88DK_PATH in the Makefile to match your installation.
-# For example: Z88DK_PATH = /home/your-user/z88dk
-
-# Clean and rebuild the BIOS image
 make clean
-make
+make Z88DK_PATH=$HOME/z88dk     # or: make rom / make dos
 ```
 
-The resulting BIOS image is written to `output/aleste.bin`. The expected image size is 64 KB.
+The results are written to `output/`:
+
+- `LX.ROM` — the 64 KB BIOS image (the MiSTer core's `boot.rom`, optionally
+  followed by the 520EX ROM, AL512.BIN);
+- `bios_abi.asm` — the addresses of the resident drivers, for programs linked
+  against the ROM; its fingerprint is stored in the ROM and checked by LX-DOS;
+- `LXDOS.SYS` — LX-DOS, to copy onto a floppy image with `tools/make_msxdisk.py`.
 
 ---
 
 ## Running
 
-Launch the standalone emulator and pass it the assembled BIOS ROM:
-
-```bash
-cd ~/projects/hww/_z80/aleste-xi-bios
-./bin/z80_emu output/aleste.bin
-```
-
-Alternatively, use the emulator's built-in test target:
+The emulator for the full LX machine is `alestelx` (`emulator/lx`); see
+[`emulator/lx/README.md`](emulator/lx/README.md) for building it (CMake + SDL2)
+and its options:
 
 ```bash
 cd ~/projects/hww/_z80/aleste-xi-bios/emulator
-make run
+cmake -S . -B build && cmake --build build
+./build/alestelx -a LXDOS.DSK ../output/LX.ROM
 ```
 
 ---
 
-## The `shaeon` Branch — MiSTer Port and Extended BIOS
+## The LX BIOS, LX-DOS and the MiSTer Core
 
-The `shaeon` branch in this repository contains work merged from the
-**AlesteLX_MiSTer** project:
+The BIOS in this repository is the one the **Aleste LX MiSTer core** boots:
 
-- **Repository:** [shaeon/AlesteLX_MiSTer](https://github.com/shaeon/AlesteLX_MiSTer)
+- **Core:** [shaeon/AlesteLX_MiSTer](https://github.com/shaeon/AlesteLX_MiSTer)
+  (Shaeon, Carlos Palmero) — the FPGA implementation of this design, with the
+  PIC and system timer, Magic Sound 2 (4 DMA sample channels at 48 kHz), the
+  DMA blitter, the PS/2 keyboard and the uPD765 floppy controller.
 
-That project takes Aleste LX beyond the frozen state described above. It provides:
+The core takes `output/LX.ROM` from this repository. What each part does:
 
-- A MiSTer FPGA core for Aleste LX (a separate core from `Aleste520EX_MiSTer`).
-- Completed peripherals: PIC and system timer, Magic Sound 2 (4 DMA sample channels at 48 kHz), DMA/blitter, and PS/2 keyboard.
-- The `aleste-xi-bios` extended with drivers, an 80×25 console, and a small monitor.
-- `LX-DOS`, which boots `LXDOS.SYS` from disk and runs programs.
+| Part | Where | What it does |
+|---|---|---|
+| Linker map and startup | `asm/sections.asm`, `asm/crt0_aleste.asm` | Places every section at its fixed address (see *Building*); IM 1 at 0038h jumps to the interrupt driver; the stack is at the top of window 2 (BFF0h) |
+| Interrupts | `drivers/int` | Dispatches the native PIC lines (0 floppy, 1 DMA, 2 VBlank, 3 Magic Sound 2, 4 Gate Array 300 Hz, 6 timer) to one handler each |
+| Timer | `drivers/timer` | Milliseconds and uptime |
+| DMA | `drivers/dma` | Copies and fills rectangles in physical memory; all drawing goes through it, so no window is needed for VRAM |
+| Video | `drivers/crtc`, `drivers/vbuf`, `drivers/palette` | Video modes (640x200x2 text, 320x200x256), glyph drawing, the 12-bit palette |
+| Keyboard, sound, floppy | `drivers/kbd`, `drivers/snd`, `drivers/fdc` | PS/2 keyboard; Magic Sound 2; uPD765 sectors (720 KB) |
+| Console, files, music | `src/console.c`, `src/fat.c`, `src/mod.c`, `src/tune.c` | Text console with a status line; FAT12 read/write; MOD player; the boot tune |
+| ROM monitor | `main.c` | HELP, CLS, TIME, BEEP, KEYB, PLAY, DIR, LOAD, MOD, STOP, DUMP, KEYS, DEMO, BOOT (LX-DOS), 520EX (the compatible mode) |
+| Booting a system | `bios/boot.asm` | Maps LXDOS.SYS (banks 20h-22h of slot 3) into windows 0-2 and jumps to it; window 3 keeps the drivers |
+| ABI | `output/bios_abi.asm` | The fixed addresses of the resident drivers; programs such as LX-DOS are linked against it, and its fingerprint is checked at boot |
+| LX-DOS | `dos/` | CP/M 2.2 and MSX-DOS 1 compatible DOS, with LX extensions for music and graphics; `bios/dosgate.asm` holds the gates between .COM programs and LX-DOS |
+| Tests | `dos/test/` | Programs with their prebuilt .COM files: files, MSX-DOS calls, graphics, the syscall protocol (`sys/SYSTEST`: `OUT (F2h),A`, exit on RET, interrupt hold) and ZEXALL/ZEXDOC |
 
-In other words, `shaeon` is not a fork of the frozen architecture — it is the
-continuation of it, with the BIOS and driver model actually exercised on
-hardware (or on a faithful FPGA core of it).
+The supervisor/user mode and the syscall protocol (`OUT (F2h),A`, the exit on
+RET and the interrupt hold on control bit 3) are described in
+[`doc/aleste-lx.md`](https://github.com/shaeon/AlesteLX_MiSTer/blob/main/doc/aleste-lx.md)
+of the core and in the documentation repository.
 
-If you want to see what Aleste LX looks like once the pieces described in this
-README are filled in, start there.
-
---- 
+---
 
 ## The Driver Model
 
@@ -279,13 +296,12 @@ The following components are available:
 - The emulator builds and runs a Z80 image.
 - The bundled Z80 CPU emulation dependency builds.
 - The BIOS and driver source trees, along with their C and assembly interfaces, are in place.
-- The BIOS source assembles into `output/aleste.bin`.
+- The BIOS and LX-DOS build into `output/LX.ROM` and `output/LXDOS.SYS` (see *The LX BIOS, LX-DOS and the MiSTer Core*).
 
 The following areas remain incomplete:
 
 - Some drivers, including `video` and `storage`, are stubs; parts of `services/` are planned or unfinished.
 - The debugger is functional but does not implement all intended features.
-- The build configuration assumes a specific local Z88DK path, which must be adjusted in the `Makefile`.
 
 The main reason to explore or fork this repository is its **architecture and development workflow**, not its completeness as a finished product.
 
