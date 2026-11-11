@@ -3,6 +3,7 @@
 #   make            ROM + ABI + LX-DOS  ->  output/LX.ROM, output/LXDOS.SYS
 #   make rom        only the ROM and its ABI (output/bios_abi.asm)
 #   make dos        LX-DOS (needs the ROM's ABI)
+#   make disk       the LX-DOS boot floppy (output/LXDOS.DSK, needs python3)
 #   make clean
 #
 # z88dk: set Z88DK_PATH here or on the command line (make Z88DK_PATH=...), or
@@ -56,6 +57,16 @@ all: rom dos
 
 rom: $(OUTPUT_DIR)/LX.ROM
 dos: $(OUTPUT_DIR)/LXDOS.SYS
+disk: $(OUTPUT_DIR)/LXDOS.DSK
+
+# LX-DOS boot floppy: LXDOS.SYS, the test programs, the images and the test MOD
+DISK_FILES = dos/disk/README.TXT dos/test/*.COM dos/test/LXDEMO.MOD \
+	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/zex/*.COM
+$(OUTPUT_DIR)/LXDOS.DSK: $(DOS) $(wildcard $(DISK_FILES)) tools/make_msxdisk.py
+	rm -rf $(BUILD_DIR)/disk
+	mkdir -p $(BUILD_DIR)/disk $(OUTPUT_DIR)
+	cp $(DOS) $(wildcard $(DISK_FILES)) $(BUILD_DIR)/disk/
+	python3 tools/make_msxdisk.py $(BUILD_DIR)/disk -o $@
 
 # ROM image (64 KB): each section at its fixed address (see asm/sections.asm)
 $(ROM): $(SECTIONS) $(CRT) $(FONTS) $(DRIVERS) $(SOURCES)
@@ -123,4 +134,4 @@ debug_vbuf:
 clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
 
-.PHONY: all rom dos clean preprocess debug_vbuf
+.PHONY: all rom dos disk clean preprocess debug_vbuf

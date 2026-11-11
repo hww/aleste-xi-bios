@@ -93,7 +93,7 @@ aleste-xi-bios/
 ├── src/                 Console, FAT12, MOD player, boot tune
 ├── src/drivers/         C-side driver wrappers
 ├── dos/                 LX-DOS (loaded from floppy as LXDOS.SYS) and its test programs
-├── tools/               Floppy image, LXI image and test MOD generators (Python)
+├── tools/               Floppy images (MSX-DOS, EDSK), LXI images, the test MOD (Python)
 ├── services/            Higher-level services (console, filesystem, players) — planned
 ├── emulator/            Virtual platform and debugger
 │   ├── src/             CPU, MMU, CRTC, palette, ports, screen, debugger
@@ -203,7 +203,10 @@ The results are written to `output/`:
   followed by the 520EX ROM, AL512.BIN);
 - `bios_abi.asm` — the addresses of the resident drivers, for programs linked
   against the ROM; its fingerprint is stored in the ROM and checked by LX-DOS;
-- `LXDOS.SYS` — LX-DOS, to copy onto a floppy image with `tools/make_msxdisk.py`.
+- `LXDOS.SYS` — LX-DOS;
+- `LXDOS.DSK` (`make disk`, needs python3) — the LX-DOS boot floppy: LXDOS.SYS,
+  the test programs, the images and the test MOD (`dos/disk/README.TXT`
+  lists them).
 
 ---
 
