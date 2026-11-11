@@ -11,6 +11,7 @@ static uint16_t do_unpack(uint16_t word, PixFmt fmt, uint8_t pos) {
     case FMT_16BPP:  return word;
     case FMT_PASS_LO8: return word & 0xFF;
     case FMT_PASS_HI8: return (word >> 8) & 0xFF;
+    case FMT_RSV:      break;      // reserved format: reads as 0
     }
     return 0;
 }
@@ -34,6 +35,7 @@ static uint16_t do_pack(uint16_t word, uint16_t pixel, PixFmt fmt, uint8_t pos) 
     case FMT_16BPP: return pixel;
     case FMT_PASS_LO8: return (word & 0xFF00) | (pixel & 0x00FF);
     case FMT_PASS_HI8: return (word & 0x00FF) | ((pixel & 0x00FF) << 8);
+    case FMT_RSV:      break;      // reserved format: the word is left unchanged
     }
     return word;
 }
