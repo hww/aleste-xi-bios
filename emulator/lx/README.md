@@ -203,7 +203,8 @@ and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
-| SYSTEST.COM (`tests/systest.asm`): `OUT (F2h),A` syscalls from user mode with the agreed wrapper/exit layout, VBlank enabled and keys pressed during its 1 s wait | 20009 calls, 74 interrupts taken in user mode, 2 races (interrupt right after `OUT (F2h),A`) detected and handled, private and shared pages OK; 380 cycles per null call (the earlier RST 6 prototype: 1511) |
+| SYSTEST.COM (`tests/systest.asm`): `OUT (F2h),A` syscalls from user mode with the wrapper/exit layout agreed with hww, keys pressed during its 1 s wait | same result as the core in simulation: 20009 calls, 8 interrupts taken in user mode, private and shared pages OK; 380 cycles per null call (RST 6 was 1511). With `VBLANK equ 1`: 74 interrupts and 2 races handled (the core still hangs in that mode: open issue) |
+| MAPTEST2.COM (`tests/maptest2.asm`): on a map switch (trap or exit), which map supplies the opcode and the operand | the opcode from the old map, the operand and what follows from the new one, as in the core |
 | VIEW.COM and TUNNEL.COM on LXDOS.DSK (LX-DOS graphics, AlesteLX_MiSTer) | the four sample .LXI images; the tunnel with its rotating palette |
 | GDB server (`tests/gdb_rsp_test.py`) | target.xml, registers, memory (logical and physical), breakpoint at `_main`, continue, step, monitor, Ctrl-C and kill |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
