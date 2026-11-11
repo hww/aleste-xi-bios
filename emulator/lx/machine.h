@@ -109,6 +109,7 @@ private:
     uint8_t slot_super = 0xFF, slot_user = 0xFF;
     uint8_t bank[16] = {};
     bool    supervisor = true, exit_pending = false;
+    bool    int_hold = false;     // bloqueo de interrupciones (bit 3 del control, como mmu_native.sv)
     uint8_t cur_slot(int page) const;
     uint8_t mmu_read(uint8_t reg, uint16_t port);
     void    mmu_write(uint8_t reg, uint8_t v);
