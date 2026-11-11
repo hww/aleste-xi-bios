@@ -105,22 +105,28 @@ uint32_t Machine::translate(uint16_t addr) const {
 }
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
-    if (legacy()) return mem[leg_translate(addr, false)];
-    // Como mmu_native.sv: el cambio de modo en un M1 (la entrada por una trampa
-    // de 0038h/0066h, bit 2, o la salida pendiente tras escribir F0h con el
-    // bit 0 a 0) se registra en el flanco de reloj en que se detecta el M1,
-    // cuando la direccion fisica de ESE codigo de operacion ya ha salido: el
-    // codigo de operacion se lee todavia con el mapa anterior; sus operandos,
-    // la pila y las instrucciones siguientes, con el nuevo. La trampa tiene
-    // prioridad sobre la salida pendiente.
+    if (legacy()) {
+        // al pasar a legacy (el 520EX), como en mmu_native.sv: la salida
+        // pendiente se completa en el M1 siguiente
+        if (m1 && exit_pending) { supervisor = false; exit_pending = false; }
+        return mem[leg_translate(addr, false)];
+    }
+    // Como mmu_native.sv. La entrada por una trampa (M1 de 0038h/0066h, bit 2)
+    // se registra en el M1, cuando la direccion de ese codigo de operacion ya ha
+    // salido: el codigo de operacion se lee con el mapa anterior; sus operandos,
+    // la pila y lo que sigue, con el nuevo.
     uint32_t p = translate(addr);
     if (m1) {
         bool trap = (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066);
         if (!supervisor && trap) { supervisor = true; exit_pending = false; }
-        else if (exit_pending) { supervisor = false; exit_pending = false; }
     }
-    if (p >= 0xFF0000) return 0xFF;                     // MMIO no se ve como memoria
-    return mem[p];
+    uint8_t v = p >= 0xFF0000 ? 0xFF : mem[p];          // MMIO no se ve como memoria
+    // Salida del supervisor en el RET (propuesta de hww): OUT (F0h) con el bit
+    // 0 a 0 solo la arma; sale en el M1 que lee un C9. Ese codigo de operacion
+    // se ha leido con el mapa del supervisor; la pila del RET (la vuelta), ya
+    // con el del usuario. Entre el OUT y el RET, interrupciones desactivadas.
+    if (m1 && supervisor && exit_pending && v == 0xC9) { supervisor = false; exit_pending = false; }
+    return v;
 }
 
 void Machine::mwrite(uint16_t addr, uint8_t v) {
