@@ -106,14 +106,19 @@ uint32_t Machine::translate(uint16_t addr) const {
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
     if (legacy()) return mem[leg_translate(addr, false)];
+    // Como mmu_native.sv: el cambio de modo en un M1 (la entrada por una trampa
+    // de 0038h/0066h, bit 2, o la salida pendiente tras escribir F0h con el
+    // bit 0 a 0) se registra en el flanco de reloj en que se detecta el M1,
+    // cuando la direccion fisica de ESE codigo de operacion ya ha salido: el
+    // codigo de operacion se lee todavia con el mapa anterior; sus operandos,
+    // la pila y las instrucciones siguientes, con el nuevo. La trampa tiene
+    // prioridad sobre la salida pendiente.
+    uint32_t p = translate(addr);
     if (m1) {
-        // como mmu_native.sv: la entrada por una trampa (0038h/0066h, bit 2)
-        // tiene prioridad sobre la salida pendiente (en el M1 siguiente)
         bool trap = (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066);
         if (!supervisor && trap) { supervisor = true; exit_pending = false; }
         else if (exit_pending) { supervisor = false; exit_pending = false; }
     }
-    uint32_t p = translate(addr);
     if (p >= 0xFF0000) return 0xFF;                     // MMIO no se ve como memoria
     return mem[p];
 }
