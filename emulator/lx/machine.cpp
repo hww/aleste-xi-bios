@@ -199,6 +199,7 @@ void Machine::set_line(int n, bool level) {
 }
 
 void Machine::pic_update() {
+    set_line(0, fdc.irq());           // INT de la disquetera (como u765.sv: busqueda, ejecucion, resultado)
     set_line(1, dma_done && (dma_ctrl & 0x08));
     set_line(3, ms2_irq_stat != 0);
     set_line(7, (kin_ctrl & 1) && !kq.empty());

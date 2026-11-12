@@ -17,4 +17,5 @@ Supervisor and user mode (the syscall protocol):
   MAPTEST, MAPTEST2   which map each instruction is fetched from when
                       the MMU switches maps
   VBTEST              VBlank interrupts with a program running
+  FDCINT              the floppy INT on PIC line 0 (expects 0101010)
 
