@@ -10,54 +10,72 @@ namespace lx {
 
 struct MicroWord {
     uint8_t  reg_op   : 5;
-    uint8_t  alu_op   : 5;
-    uint8_t  ctrl_op  : 3;
-    uint8_t  reg_addr : 5;
-    uint8_t  mask     : 3;
-    uint8_t  cond     : 3;
-    uint16_t imm      : 12;
-    void unpack(const uint16_t w[3]);
-    void pack(uint16_t w[3]) const;
-};
+    uint8_t  imm_class: 2;
+    uint8_t  dst      : 5;
+    uint8_t  ds       : 1;
+    uint8_t  cond     : 4;
+    uint8_t  f        : 1;
+    uint8_t  l        : 1;
+    uint8_t  sx       : 1;
+    uint16_t imm12    : 12;
+    uint8_t  src      : 6;
+    uint32_t imm24    : 24;
 
-enum RegOp : uint8_t {
-    R_NOP = 0,
-    R_LDR, R_LDR_PUSH, R_STR, R_STR_POP,
-    R_CLR_A, R_CLR_AB, R_CLR_C,
-    R_LDD, R_LDD_PUSH, R_LDDS, R_LDDS_PUSH,
-    R_SETS, R_SETD, R_SETP, R_LDCNT, R_FLUSH,
-    R_LDX, R_LDX_PUSH, R_STX, R_STX_POP,
-    R_LDI, R_LDI_PUSH, R_LDH, R_LDL,
-    R_PACKER_RD, R_PACKER_RD_PUSH, R_PACKER_WR, R_PACKER_WR_POP,
-    R_SETMODE, R_SETPAGE, R_ADDR, R_IRQ,
+    void unpack(const uint16_t w[2]);
+    void pack(uint16_t w[2]) const;
 };
 
 enum AluOp : uint8_t {
-    A_LOGIC_0=0, A_LOGIC_1, A_LOGIC_2, A_LOGIC_3,   // NOT A
-    A_LOGIC_4, A_LOGIC_5, A_LOGIC_6, A_LOGIC_7,     // XOR
-    A_LOGIC_8, A_LOGIC_9, A_LOGIC_10, A_LOGIC_11,   // AND
-    A_LOGIC_12, A_LOGIC_13, A_LOGIC_14, A_LOGIC_15, // OR
-    A_ADD=16, A_SUB=17, A_CMP=18, A_SHL=19, A_SHR=20, A_SAR=21,
+    A_MOV=0, A_AND, A_OR, A_XOR, A_ANDN,
+    A_ADD, A_SUB, A_CMP, A_TST,
+    A_ROR, A_SHR, A_SAR,
+    A_MUL, A_MULH,
 };
 
 enum CtrlOp : uint8_t {
-    C_NOP = 0, C_JMP, C_CALL, C_RET, C_LOOP, C_JMPA, C_HALT, C_WAIT_FLAG,
+    C_NOP=0, C_JMP, C_CALL, C_RET, C_JMPR, C_HALT, C_IRQ,
 };
-enum Cond : uint8_t { Z=0, NZ, N, NN, C, NC, RES0, RES1 };
+
+enum Cond : uint8_t {
+    AL=0, EQ, NE, CS, CC, MI, PL, VS, VC, HI, LS, GE, LT, GT, LE,
+    COND_RSV=15,
+};
+
+enum Operand : uint8_t {
+    OP_ZERO       = 32,
+    OP_FLAGS      = 33,
+    OP_SHADOW     = 34,
+    OP_LOOP       = 35,
+    OP_BUSY_SRC   = 36,
+    OP_BUSY_DST   = 37,
+    OP_BUSY_STM   = 38,
+    OP_SRC_IDX    = 39,
+    OP_SRC_PIX    = 40,
+    OP_SRC_W16    = 41,
+    OP_SRC_STEP   = 42,
+    OP_SRC_MODE   = 43,
+    OP_SRC_PAGE   = 44,
+    OP_DST_IDX    = 45,
+    OP_DST_PIX    = 46,
+    OP_DST_W16    = 47,
+    OP_DST_STEP   = 48,
+    OP_DST_MODE   = 49,
+    OP_DST_PAGE   = 50,
+    OP_STM_PTR    = 51,
+    OP_STM_W16    = 52,
+    OP_STM_W24    = 53,
+    OP_STM_STEP   = 54,
+    OP_STM_MODE   = 55,
+    OP_STM_PAGE   = 56,
+    OP_FLUSH      = 57,
+    OP_STM_PIX    = 58,
+};
 
 enum RIdx : uint8_t {
     R_DX=0, R_DY, R_DW, R_DH, R_SX, R_SY, R_SW, R_SH,
     R_DSTRIDE, R_SSTRIDE, R_DBASE, R_SBASE, R_FG, R_BG, R_MODE,
     R_CX0, R_CY0, R_CX1, R_CY1, R_SDX, R_SDY, R_DDX, R_DDY,
     R_T0=23, R_T1, R_T2, R_T3, R_T4, R_T5, R_T6, R_T7, R_T8,
-};
-
-struct DeviceMap {
-    static constexpr uint8_t ZERO=0, A=1, B=2, C=3,
-        SPIX=4, DPIX=5, SIDX=6, DIDX=7, DPTR=8, FLAG=9, CNT=10,
-        FLAG_BUSY=11, FLAG_IRQ=12, FLAG_DMA=13, FLAG_CNT_ZERO=14,
-        FLAG_BUSY_NOT=15, FLAG_IRQ_NOT=16, FLAG_DMA_NOT=17,
-        FLAG_CNT_ZERO_NOT=18;
 };
 
 class GPU {
@@ -74,32 +92,26 @@ public:
     bool run_until_halt(uint64_t limit = 1'000'000);
     bool load_packet(const uint16_t* words, size_t count);
 
-    void set_clock_ratio(uint32_t num, uint32_t den) { clk_num_ = num; clk_den_ = den ? den : 1; }
-
     uint32_t a() const { return A_; }
     uint32_t b() const { return B_; }
     uint32_t c() const { return C_; }
-    uint8_t  flags() const { return (z_?1:0) | (n_?2:0) | (c_?4:0); }
+    uint8_t  flags() const { return (z_?1:0) | (n_?2:0) | (c_?4:0) | (v_?8:0); }
 
-    uint16_t irq_code() const { return irq_code_; }
-    bool     irq() const { return irq_pending_; }
-    void     clear_irq() { irq_pending_ = false; }
     uint16_t error_code() const { return error_code_; }
+    bool     irq_pending() const { return irq_pending_; }
+    uint16_t irq_code() const    { return irq_code_; }
+    void     clear_irq()         { irq_pending_ = false; }
 
-    void set_ch_mode(int ch, ChannelMode m) { if (ch >= 0 && ch < 4) ch_mode_[ch] = m; }
-    ChannelMode ch_mode(int ch) const { return (ch >= 0 && ch < 4) ? ch_mode_[ch] : ChannelMode{}; }
-    void set_page(Channel ch, uint32_t addr24) { buffer_.set_page(ch, addr24); }
-    void set_mask(uint16_t m) { mask_ = m; }
-    uint16_t mask() const { return mask_; }
+    void set_ch_mode(int ch, uint8_t fmt) { if (ch>=0 && ch<4) ch_mode_[ch] = fmt & 7; }
+    uint8_t ch_mode(int ch) const { return (ch>=0 && ch<4) ? ch_mode_[ch] : 0; }
+    void set_page(Channel ch, uint8_t page) { buffer_.set_page(ch, page); }
 
-    bool buffer_error() const   { return buffer_.error(); }
-    void clear_buffer_error()   { buffer_.clear_error(); }
+    bool buffer_error() const  { return buffer_.error(); }
+    void clear_buffer_error()  { buffer_.clear_error(); }
 
-    uint32_t reg(int idx) const { return (idx >= 0 && idx < 32) ? r_[idx] : 0; }
-    uint32_t didx() const { return didx_; }
-    uint32_t sidx() const { return sidx_; }
-    uint32_t dptr() const { return dptr_; }
-    uint32_t cnt()  const { return loop_cnt_; }
+    uint32_t reg(int idx) const { return (idx>=0 && idx<32) ? r_[idx] : 0; }
+    uint32_t shadow() const { return shadow_; }
+    uint32_t loop_reg() const { return loop_reg_; }
 
     void set_trace(bool on) { trace_ = on; }
     bool trace() const { return trace_; }
@@ -114,39 +126,33 @@ private:
 
     std::vector<MicroWord> code_;
     uint16_t pc_ = 0;
-    std::vector<uint16_t> call_stack_;
-    uint32_t loop_cnt_ = 0;
+    uint32_t shadow_ = 0;
+    uint32_t loop_reg_ = 0;
 
     uint32_t A_ = 0, B_ = 0, C_ = 0;
     uint32_t R_ = 0;
-    bool z_ = false, n_ = false, c_ = false;
+    bool z_=false, n_=false, c_=false, v_=false;
 
     uint32_t r_[32] = {};
-    uint32_t sidx_ = 0, didx_ = 0, dptr_ = 0;
-    ChannelMode ch_mode_[4] = {};
-    uint16_t mask_ = 0xFFFF;
+    uint8_t  ch_mode_[4] = {};
+    uint8_t  ch_page_[4] = {};
+    uint32_t ch_idx_[4] = {};
+    uint32_t ch_step_[4] = {};
 
-    // AddrPacker: результат ADDR
-    uint32_t ADDR_ = 0;
-    uint8_t  ADDR_pos_ = 0;
-    uint8_t  ADDR_ch_ = 0;
-    bool     ADDR_valid_ = false;
-
-    bool irq_pending_ = false;
-    uint16_t irq_code_ = 0;
     uint16_t error_code_ = 0;
-
-    uint32_t clk_num_ = 1, clk_den_ = 1;
+    bool     irq_pending_ = false;
+    uint16_t irq_code_ = 0;
     bool trace_ = false;
 
     int      tick_one();
-    uint32_t read_device(uint8_t dev);
-    void     write_device(uint8_t dev, uint32_t v);
-    uint32_t exec_alu(AluOp op);
-    void     exec_ctrl(CtrlOp op, uint16_t imm);
-    bool cond_true(Cond c) const;
-    void push(uint32_t v) { C_ = B_; B_ = A_; A_ = v; }
-    void pop()            { A_ = B_; B_ = C_; C_ = 0; }
+    uint32_t read_operand(uint8_t op);
+    void     write_operand(uint8_t op, uint32_t v);
+    uint32_t exec_alu(AluOp op, uint32_t a, uint32_t b);
+    void     exec_ctrl(CtrlOp op, uint16_t addr, uint8_t reg);
+    bool     cond_true(Cond c) const;
+    void     set_flags(uint32_t res, bool carry, bool overflow);
+    void     push(uint32_t v) { C_=B_; B_=A_; A_=v; }
+    void     pop()            { A_=B_; B_=C_; C_=0; }
 };
 
 } // namespace lx

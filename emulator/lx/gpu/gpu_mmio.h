@@ -13,7 +13,7 @@ public:
     void    write(uint8_t reg, uint8_t v);
 
     void tick(int cpu_cycles) { gpu_.tick(cpu_cycles); }
-    bool irq() const { return gpu_.irq(); }
+    bool irq() const { return gpu_.irq_pending(); }
 
 private:
     GPU& gpu_;

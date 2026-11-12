@@ -45,9 +45,7 @@ int PixelPacker::read_pixel(Channel ch, uint32_t addr24, PixFmt fmt, uint8_t pos
     return t;
 }
 
-int PixelPacker::write_pixel(Channel ch, uint32_t addr24, PixFmt fmt, uint8_t pos, uint16_t pixel,
-                             uint16_t mask) {
-    if (!(mask & (1u << pos))) return 1;
+int PixelPacker::write_pixel(Channel ch, uint32_t addr24, PixFmt fmt, uint8_t pos, uint16_t pixel) {
     uint16_t word = 0;
     int t = buf_.read(ch, addr24, word);
     word = do_pack(word, pixel, fmt, pos);
