@@ -164,13 +164,11 @@ uint32_t GPU::exec_alu(AluOp op, uint32_t a, uint32_t b) {
         break;
     }
     case A_MUL: {
-        int64_t p = (int64_t)(int32_t)(a << 8 >> 8) * (int64_t)(int32_t)(b << 8 >> 8);
+        // 18x18 signed -> low 24 bits (matches RTL: one DSP)
+        int32_t a18 = (int32_t)(a << 14) >> 14;
+        int32_t b18 = (int32_t)(b << 14) >> 14;
+        int64_t p = (int64_t)a18 * (int64_t)b18;
         res = (uint32_t)(p & 0xFFFFFF);
-        break;
-    }
-    case A_MULH: {
-        int64_t p = (int64_t)(int32_t)(a << 8 >> 8) * (int64_t)(int32_t)(b << 8 >> 8);
-        res = (uint32_t)((p >> 12) & 0xFFFFFF);
         break;
     }
     default: return a;

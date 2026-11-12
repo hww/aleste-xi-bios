@@ -29,7 +29,7 @@ enum AluOp : uint8_t {
     A_MOV=0, A_AND, A_OR, A_XOR, A_ANDN,
     A_ADD, A_SUB, A_CMP, A_TST,
     A_ROR, A_SHR, A_SAR,
-    A_MUL, A_MULH,
+    A_MUL
 };
 
 enum CtrlOp : uint8_t {

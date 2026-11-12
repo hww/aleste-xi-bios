@@ -464,19 +464,15 @@ static bool test_mul(bool trace) {
     c.push_back(I_ldi24(R_T1, 2000));
     c.push_back(I_reg(R_T2, R_T1, A_MOV));   // T2 = 2000
     c.push_back(I_reg(R_T2, R_T0, A_MUL));   // T2 = 2000 * 1000 = 0x1E8480
-    c.push_back(I_ldi24(R_T0, 0x1000));
-    c.push_back(I_ldi24(R_T1, 0x1000));
-    c.push_back(I_reg(R_T3, R_T1, A_MOV));   // T3 = 0x1000
-    c.push_back(I_reg(R_T3, R_T0, A_MULH));  // T3 = (0x1000 * 0x1000) >> 12 = 0x1000
     c.push_back(I_ctrl(C_HALT, 0));
     std::vector<uint16_t> pkt;
     emit_code(pkt, 0, c); emit_run(pkt, 0); emit_end(pkt);
     if (!gpu.load_packet(pkt.data(), pkt.size())) { std::printf("  FAIL load\n"); return false; }
     gpu.start(0);
     if (!gpu.run_until_halt(500000)) { std::printf("  FAIL halt\n"); return false; }
-    uint32_t v2 = gpu.reg(R_T2), v3 = gpu.reg(R_T3);
-    std::printf("  MUL=%06X MULH=%06X\n", v2, v3);
-    bool pass = (v2 == 0x1E8480) && (v3 == 0x1000);
+    uint32_t v2 = gpu.reg(R_T2);
+    std::printf("  MUL=%06X\n", v2);
+    bool pass = (v2 == 0x1E8480);
     std::printf("  %s\n", pass ? "PASS" : "FAIL");
     return pass;
 }
