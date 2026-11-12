@@ -4,11 +4,13 @@
 
 module vbuf_16k1b
 
+EXTERN __crtc_set_mode
+
 include "../../inc/bios/errors.inc"
 
 ; ---- Константы драйвера ----
 defc VRAM_BASE      = 0x8000     ; Базовый адрес VRAM
-defc MMU_SLOT2_CTL  = 0x7F       ; Порт управления MMU слота 2
+defc MMU_SLOT2_CTL  = 0xFE       ; MMU: banco de la ventana 2 (8000-BFFF)
 defc VRAM_PAGE      = 0x10       ; Номер страницы VRAM
 defc SCREEN_WIDTH   = 640
 defc SCREEN_HEIGHT  = 200
@@ -91,8 +93,10 @@ section DRV_CODE
 ; Установить банк VRAM
 ; Сохраняет: AF, BC
 drv_16k1b_set_vram_bank:
+    push af
     ld a, VRAM_PAGE
     out (MMU_SLOT2_CTL), a
+    pop af
     ret
 
 ; Умножение A * B -> DE
@@ -120,6 +124,8 @@ drv_16k1b_mult_ab:
 ; 1. Инициализация драйвера
 drv_16k1b_init:
     call drv_16k1b_set_vram_bank
+    ld a, 3                  ; modo CRTC 16k1b (640x200, 1 bpp, lineal)
+    call __crtc_set_mode
     xor a
     ret
 
@@ -350,26 +356,18 @@ drv_16k1b_draw_char:
     pop af                   ; A = код символа
     pop hl                   ; HL = адрес шрифта
     
-    ; Вычисляем адрес символа в шрифте: HL = шрифт + код * 8
-    ld l, a
-    ld h, 0
+    ; Адрес символа в шрифте: HL = шрифт + (код - 20h) * 8
+    sub 0x20
+    push de
+    ld e, a
+    ld d, 0
+    ex de, hl                ; HL = код, DE = шрифт
     add hl, hl               ; *2
     add hl, hl               ; *4
     add hl, hl               ; *8
-    add hl, hl               ; HL теперь указывает на базу шрифта
-    ; на самом деле нужно: HL = шрифт + A * 8
-    ; но у нас HL уже содержит шрифт, так что:
-    ld c, a
-    ld b, 0
-    add hl, bc               ; *1
-    add hl, bc               ; *2
-    add hl, bc               ; *3
-    add hl, bc               ; *4
-    add hl, bc               ; *5
-    add hl, bc               ; *6
-    add hl, bc               ; *7
-    add hl, bc               ; *8
-    
+    add hl, de               ; + шрифт
+    pop de                   ; DE = адрес VRAM
+
     ; Теперь вызываем рисование по адресу
     jp drv_16k1b_draw_char_at_addr
 

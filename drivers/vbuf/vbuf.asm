@@ -66,7 +66,6 @@ __vbuf_get_clip_rect:jp _undefined_method    ; +24 Получить отсече
 __vbuf_copy_rect:    jp _undefined_method    ; +27 Копировать область
 
 ; ---- Примитивы рисования ----
-align 32
 
 __vbuf_get_addr:     jp _undefined_method    ; +0  Адрес VRAM
 __vbuf_put_pixel_fast:jp _undefined_method   ; +3  Пиксель (быстро)

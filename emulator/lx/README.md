@@ -194,6 +194,13 @@ A full guide, with DeZog and GDB examples: `lx/GDB.md` (Spanish: `lx/GDB.es.md`)
 `tests/gdb_rsp_test.py` talks the protocol like GDB does (registers, logical
 and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
 
+## Known difference with the core
+
+PIC line 4 (LEGACY, the Gate Array counter: every 52 lines of the CPC CRTC)
+keeps running in native mode in the core; the emulator only emulates that CRTC
+in 520EX mode, so in native mode it never raises line 4. Neither the BIOS nor
+LX-DOS use it.
+
 ## Validation (same results as the core in simulation)
 
 | Test | Result |
@@ -203,7 +210,9 @@ and physical memory, breakpoint, continue, step, monitor, Ctrl-C, kill).
 | `modplay lxdemo.mod` | bass C3 and melody E4/F4, as in the core |
 | ZEXDOC.COM (whole run) | all 67 tests OK |
 | GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
-| SYSTEST.COM (`tests/systest.asm`): `OUT (F2h),A` syscalls from user mode, keys pressed during its 1 s wait | same result as the core in simulation: 1009 calls, 8 interrupts taken in user mode, private and shared pages OK; 413 cycles per null call (the earlier RST 6 prototype: 1511) |
+| SYSTEST.COM (`tests/systest.asm`): `OUT (F2h),A` syscalls from user mode, exit on RET and interrupt hold (control bit 3), both hww's proposals; private user stack, no DI/EI; keys pressed during its 1 s wait | same result as the core in simulation: 20009 calls, 8 interrupts taken in user mode, private pages OK; 427 cycles per loop iteration (a null call plus the loop). With `VBLANK equ 1`: 69 interrupts in user mode, all returning through the RET (103 in the core simulation, same result) |
+| MAPTEST2.COM (`tests/maptest2.asm`): on a map switch (trap or exit), which map supplies the opcode and the operand | the opcode from the old map, the operand and what follows from the new one, as in the core |
+| FDCINT.COM (`../dos/test/sys/fdcint.asm`): the floppy INT on PIC line 0 (idle, after a seek, after SENSE INT, READ ID result, after it, READ DATA execution, after it) | `0101010`, as the uPD765 without DMA (also the PPI PB1 bit in 520EX mode) |
 | VIEW.COM and TUNNEL.COM on LXDOS.DSK (LX-DOS graphics, AlesteLX_MiSTer) | the four sample .LXI images; the tunnel with its rotating palette |
 | GDB server (`tests/gdb_rsp_test.py`) | target.xml, registers, memory (logical and physical), breakpoint at `_main`, continue, step, monitor, Ctrl-C and kill |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |

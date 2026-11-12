@@ -83,6 +83,7 @@ SECTION DRV_CODE
 ; Out: A=1 если найден, A=0 если нет, Carry=1 при ошибке
 ; -------------------------------------------------------------------
 crtc_detect:
+    call crtc_select_page
     push bc
     
     ; Пробуем записать/считать тестовое значение в регистр 12
@@ -154,6 +155,7 @@ crtc_command:
     ret
 
 @write_reg:
+    call crtc_select_page
     ; B = регистр, C = значение
     ld a, b
     out (CRTC_PORT_ADDR), a
@@ -163,11 +165,12 @@ crtc_command:
     ret
 
 @read_reg:
+    call crtc_select_page
     ; B = регистр, возвращает A = значение
     ld a, b
     out (CRTC_PORT_ADDR), a
     in a, (CRTC_PORT_DATA)
-    xor a        ; сброс carry
+    or a         ; сброс carry, A = значение
     ret
 
 @wait_vsync:
@@ -185,6 +188,7 @@ crtc_command:
 ; crtc_uninstall - выгрузка драйвера
 ; -------------------------------------------------------------------
 crtc_uninstall:
+    call crtc_select_page
     ; Сбрасываем CRTC в безопасное состояние
     ld hl, crtc_safe_regs
     ld b, 16               ; 16 регистров CRTC
@@ -208,6 +212,9 @@ crtc_uninstall:
 ; In: A = код режима (0-10)
 ; -------------------------------------------------------------------
 crtc_set_mode:
+    push af
+    call crtc_select_page
+    pop af
     ; Сохраняем режим
     ld (crtc_current_mode), a
     
@@ -238,6 +245,7 @@ crtc_set_mode:
 ; In: H = слот (0-3), L = страница/смещение
 ; -------------------------------------------------------------------
 crtc_set_view:
+    call crtc_select_page
     ; Устанавливаем Start Address High (регистр 12)
     ld a, CRTC_REG_START_H
     out (CRTC_PORT_ADDR), a
@@ -258,6 +266,12 @@ crtc_set_view:
 ; ===================================================================
 
 ; Получить таблицу регистров для режима A
+; Pagina MMIO del CRTC (FF0100-FF017F). Conserva todo salvo A.
+crtc_select_page:
+    ld a, MMIO_PAGE_CRTC
+    out (MMU_PORT_MMIO_PAGE), a
+    ret
+
 get_mode_table:
     ld l, a
     ld h, 0

@@ -44,7 +44,7 @@ void vbuf_clear(uint8_t color) {
         ld hl, #2
         add hl, sp
         ld a, (hl)  ; color
-        call __vbuf_clear
+        jp __vbuf_clear
     __endasm;
 }
 
@@ -130,40 +130,28 @@ void vbuf_draw_char(const uint8_t* font, uint8_t char_code,
                    uint16_t x, uint16_t y) {
     font; char_code; x; y;
     __asm
-        ; [SP+2] = font L, 
-        ; [SP+3] = font H
-        ; [SP+4] = char_code, [SP+6] = x.l, [SP+7] = x.h
-        ; [SP+8] = y.l, [SP+9] = y.h
-        ld hl, #2
+        ; [SP+2..3] = font, [SP+4] = char_code (1 byte),
+        ; [SP+5..6] = x, [SP+7..8] = y
+        ld hl, #4
         add hl, sp
-        ld e, (hl)  ; font L
-        inc hl
-        ld d, (hl)  ; font H
-        inc hl
-        inc hl      ; пропускаем старший байт char_code
         ld a, (hl)  ; char_code
         inc hl
-        ld c, (hl)  ; x.l
+        ld c, (hl)  ; x
         inc hl
-        ld b, (hl)  ; x.h
+        ld b, (hl)
         inc hl
-        ld l, (hl)  ; y.l (сохраняем в L)
+        ld e, (hl)  ; y
         inc hl
-        ld h, (hl)  ; y.h
-        
-        ; Теперь параметры:
-        ; DE = font, A = char_code, BC = x, HL = y
-        push hl     ; сохраняем y
-        push bc     ; сохраняем x
-        push de     ; сохраняем font
-        
-        ; Восстанавливаем в порядке для функции:
-        pop hl      ; HL = font
-        pop bc      ; BC = x
-        pop de      ; DE = y
-        ; A уже содержит char_code
-        
-        call __vbuf_draw_char
+        ld d, (hl)
+        ld hl, #2
+        add hl, sp
+        push af
+        ld a, (hl)  ; font
+        inc hl
+        ld h, (hl)
+        ld l, a
+        pop af
+        jp __vbuf_draw_char
     __endasm;
 }
 

@@ -72,7 +72,7 @@ void Machine::reset() {
     mmu_control = 0x13; mmu_page = 0; mmu_clock = 2;
     slot_super = 0xFF; slot_user = 0xFF;
     memset(bank, 0, sizeof(bank));
-    supervisor = true; exit_pending = false;
+    supervisor = true; exit_pending = false; int_hold = false;
     pic_mask = pic_pending = 0; pic_vector = 0; irq_lines = irq_prev = 0;
     tmr_ctrl = 0; tmr_reload = tmr_count = tmr_ticks = 0;
     rtc_ram[10] = 0x26; rtc_ram[11] = 0x06;             // como el core: binario, 24 h
@@ -105,17 +105,28 @@ uint32_t Machine::translate(uint16_t addr) const {
 }
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
-    if (legacy()) return mem[leg_translate(addr, false)];
+    if (legacy()) {
+        // al pasar a legacy (el 520EX), como en mmu_native.sv: la salida
+        // pendiente se completa en el M1 siguiente
+        if (m1 && exit_pending) { supervisor = false; exit_pending = false; int_hold = false; }
+        return mem[leg_translate(addr, false)];
+    }
+    // Como mmu_native.sv. La entrada por una trampa (M1 de 0038h/0066h, bit 2)
+    // se registra en el M1, cuando la direccion de ese codigo de operacion ya ha
+    // salido: el codigo de operacion se lee con el mapa anterior; sus operandos,
+    // la pila y lo que sigue, con el nuevo.
+    uint32_t p = translate(addr);
     if (m1) {
-        // como mmu_native.sv: la entrada por una trampa (0038h/0066h, bit 2)
-        // tiene prioridad sobre la salida pendiente (en el M1 siguiente)
         bool trap = (mmu_control & 0x04) && (addr == 0x0038 || addr == 0x0066);
         if (!supervisor && trap) { supervisor = true; exit_pending = false; }
-        else if (exit_pending) { supervisor = false; exit_pending = false; }
     }
-    uint32_t p = translate(addr);
-    if (p >= 0xFF0000) return 0xFF;                     // MMIO no se ve como memoria
-    return mem[p];
+    uint8_t v = p >= 0xFF0000 ? 0xFF : mem[p];          // MMIO no se ve como memoria
+    // Salida del supervisor en el RET (propuesta de hww): OUT (F0h) con el bit
+    // 0 a 0 solo la arma; sale en el M1 que lee un C9. Ese codigo de operacion
+    // se ha leido con el mapa del supervisor; la pila del RET (la vuelta), ya
+    // con el del usuario. Entre el OUT y el RET, interrupciones desactivadas.
+    if (m1 && supervisor && exit_pending && v == 0xC9) { supervisor = false; exit_pending = false; int_hold = false; }
+    return v;
 }
 
 void Machine::mwrite(uint16_t addr, uint8_t v) {
@@ -126,7 +137,7 @@ void Machine::mwrite(uint16_t addr, uint8_t v) {
 
 uint8_t Machine::mmu_read(uint8_t r, uint16_t) {
     switch (r) {
-    case 0xF0: return mmu_control;
+    case 0xF0: return (mmu_control & ~0x08) | (int_hold ? 0x08 : 0);   // bit 3: el bloqueo
     case 0xF1: return mmu_page;
     case 0xF3: return mmu_clock;
     case 0xFA: return slot_super;
@@ -142,10 +153,14 @@ void Machine::mmu_write(uint8_t r, uint8_t v) {
     switch (r) {
     case 0xF0:
         mmu_control = v;
-        if (!(v & 1) && supervisor) exit_pending = true;  // sale en el siguiente M1
+        if (!(v & 1)) {
+            if (supervisor) exit_pending = true;          // arma la salida (sale en el RET)
+            int_hold = (v & 0x02) != 0;                   // bloqueo hasta el RET (no al pasar a legacy)
+        } else
+            int_hold = (v & 0x08) != 0;                   // el nucleo lo quita con el bit 3 a 0
         break;
     case 0xF1: mmu_page = v & 0x7F; break;
-    case 0xF2: supervisor = true; break;                  // llamada al sistema
+    case 0xF2: if (!supervisor) int_hold = true; supervisor = true; break;  // llamada al sistema
     case 0xF3: mmu_clock = v; break;
     case 0xFA: slot_super = v; break;
     case 0xFB: slot_user = v; break;
@@ -169,7 +184,7 @@ void Machine::pwrite(uint16_t port, uint8_t v) {
     uint8_t p = port & 0xFF;
     // llamada al sistema: antes del bloqueo de puertos del usuario, como en
     // mmu_native.sv (OUT (F2h),A entra al supervisor aunque esten bloqueados)
-    if (p == 0xF2) { supervisor = true; return; }
+    if (p == 0xF2) { if (!supervisor) int_hold = true; supervisor = true; return; }  // con bloqueo
     if (!supervisor && (mmu_control & 0x10)) return;
     if (p < 0x80) mmio_write(0xFF0000 + mmu_page * 128 + p, v);
     else if (p >= 0xE0) mmu_write(p, v);
@@ -184,6 +199,7 @@ void Machine::set_line(int n, bool level) {
 }
 
 void Machine::pic_update() {
+    set_line(0, fdc.irq());           // INT de la disquetera (como u765.sv: busqueda, ejecucion, resultado)
     set_line(1, dma_done && (dma_ctrl & 0x08));
     set_line(3, ms2_irq_stat != 0);
     set_line(7, (kin_ctrl & 1) && !kq.empty());
@@ -629,7 +645,7 @@ int Machine::step() {
         leg_since += t;
     } else {
         pic_update();
-        if ((pic_pending & pic_mask) && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
+        if ((pic_pending & pic_mask) && !int_hold && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
         else t = z80ex_step(cpu);
         if (t <= 0) t = 4;
     }

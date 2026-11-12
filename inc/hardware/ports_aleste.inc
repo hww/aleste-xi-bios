@@ -15,7 +15,7 @@ MMU_PORT_CTRL           equ 0xF0    ; Регистр управления реж
 MMU_PORT_MMIO_PAGE      equ 0xF1    ; Выбор страницы MMIO
 MMU_PORT_SYSCALL        equ 0xF2    ; Системный вызов
 MMU_PORT_CLOCK_CTRL     equ 0xF3    ; Управление частотой CPU
-MMU_PORT_SUPER_SLOT     equ 0xF9    ; Активный слот для Supervisor
+MMU_PORT_SUPER_SLOT     equ 0xFA    ; Активный слот для Supervisor
 MMU_PORT_USER_SLOT      equ 0xFB    ; Активный слот для User
 MMU_PORT_BANK_0         equ 0xFC    ; Банк для окна 0 (0000-3FFF)
 MMU_PORT_BANK_1         equ 0xFD    ; Банк для окна 1 (4000-7FFF)
@@ -98,8 +98,8 @@ PALETTE_CTRL_MOD_ON_BIT     equ 0x80    ; Включить модификато�
 ; ==============================================================================
 
 ; Базовые регистры CRTC
-CRTC_PORT_ADDR          equ 0x00    ; Регистр адреса (выбор регистра)
-CRTC_PORT_DATA          equ 0x01    ; Регистр данных (чтение/запись)
+CRTC_PORT_ADDR          equ 0x20    ; Регистр адреса (выбор регистра) - FF0120
+CRTC_PORT_DATA          equ 0x21    ; Регистр данных (чтение/запись)
 
 ; Стандартные регистры CRTC 6845
 CRTC_REG_HTOTAL         equ 0x00    ; R0: Всего символов по горизонтали
