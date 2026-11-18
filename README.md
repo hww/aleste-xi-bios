@@ -4,11 +4,11 @@
 
 > You cannot boot a machine without firmware, and you cannot develop firmware for a machine that does not yet exist.
 
-Aleste LX breaks this deadlock by providing a **virtual hardware platform, BIOS, driver model, and debugger**, all integrated into a self-contained emulator. You can design the hardware, declare drivers in assembly, build a ROM image, and run it — before flashing a single FPGA.
+Aleste LX breaks this deadlock by providing a **virtual hardware platform, BIOS, driver model, and debugger**, all integrated into a self-contained emulator (`alestelx`, with a GDB remote debugging server). You can design the hardware, declare drivers in assembly, build a ROM image, and run it — before flashing a single FPGA.
 
 Aleste LX is a successor to the original *Aleste EX* architecture. It retains what worked while addressing several of the original design's shortcomings: a cleaner memory map, a proper driver dispatch mechanism, well-defined error handling, and a stable ABI for applications.
 
-![Debugger](./doc/emul_screen.png)
+![alestelx running LX-DOS and the LX-GPU tests](./doc/alestelx.png)
 
 ---
 
@@ -35,14 +35,15 @@ The project is built around three layers developed in parallel.
 
 ### 1. Virtual Hardware
 
-The emulator lives in `emulator/`. It contains a Z80 CPU core, provided by the bundled `z80ex` dependency, along with virtual implementations of the Aleste LX peripherals:
+The emulator, `alestelx`, lives in `emulator/lx/`. It runs the Z80 on the bundled `z80ex` core and implements the Aleste LX devices register by register, as in the FPGA core:
 
-- CRTC
-- Palette
-- Video buffer
-- MMU
-- AY-8910 audio
-- Debugger overlay
+- MMU (slots and banks, supervisor/user mode, syscalls), PIC and system timer, MC146818 clock
+- CRTC with the LX extended modes (640x200x2 text, 320x200x256) and the 12-bit palette
+- DMA blitter
+- LX-GPU, from the C++ model in [lx-gpu-rtl](https://github.com/hww/lx-gpu-rtl) (`deps/lx-gpu-rtl`), the same repository the FPGA takes the RTL from
+- Magic Sound 2, PS/2 keyboard and the uPD765 floppy controller
+- The Aleste 520EX compatible mode (legacy MMU, CPC CRTC and Gate Array, AY, tape)
+- A debugger in the terminal and a GDB remote protocol server (gdb-multiarch, DeZog)
 
 ### 2. BIOS and Drivers
 
@@ -95,10 +96,14 @@ aleste-xi-bios/
 ├── dos/                 LX-DOS (loaded from floppy as LXDOS.SYS) and its test programs
 ├── tools/               Floppy images (MSX-DOS, EDSK), LXI images, the test MOD (Python)
 ├── services/            Higher-level services (console, filesystem, players) — planned
-├── emulator/            Virtual platform and debugger
-│   ├── src/             CPU, MMU, CRTC, palette, ports, screen, debugger
-│   └── test/            Minimal test ROM and build script
+├── emulator/            The emulator
+│   ├── lx/              alestelx: the machine, debugger, GDB server (README, USAGE, GDB guides)
+│   ├── tests/           Keyboard matrix and GDB server tests, Z80 test programs
+│   ├── launchers/       Ready-made .bat/.sh scripts
+│   ├── disks/, roms/    520EX disks, test tape and ROM for the packages
+│   └── src/, test/      z80emu, the first prototype (superseded by alestelx)
 ├── deps/z80ex/          Bundled Z80 CPU emulation library
+├── deps/lx-gpu-rtl/     The LX-GPU: RTL, C++ model and assembler (submodule)
 ├── output/              LX.ROM (64 KB), bios_abi.asm, LXDOS.SYS (built)
 └── main.c               The ROM monitor
 ```
@@ -170,20 +175,19 @@ Reload the configuration or open a new terminal session to apply the changes.
 
 ## Building
 
-### 1. Build the Emulator Dependency and Binary
+### 1. Build the Emulator
 
-First, build the bundled Z80 CPU emulation dependency (`z80ex`), then compile the emulator.
+`alestelx` is built with CMake and SDL2 (`sudo apt install cmake libsdl2-dev`
+on Ubuntu; Windows uses Visual Studio and vcpkg, see
+[`emulator/lx/README.md`](emulator/lx/README.md)). CMake also builds `z80ex`
+and the LX-GPU model, which comes from the `deps/lx-gpu-rtl` submodule, so
+clone with `--recursive` (or run `git submodule update --init --recursive`).
 
 Replace the example project paths below with the actual location of your checkout.
 
 ```bash
-# Build the local Z80 CPU emulation dependency
-cd ~/projects/hww/_z80/aleste-xi-bios/deps/z80ex
-make
-
-# Build the emulator
 cd ~/projects/hww/_z80/aleste-xi-bios/emulator
-make clean && make
+cmake -S . -B build && cmake --build build
 ```
 
 ### 2. Build the BIOS (LX.ROM) and LX-DOS (LXDOS.SYS)
@@ -212,15 +216,15 @@ The results are written to `output/`:
 
 ## Running
 
-The emulator for the full LX machine is `alestelx` (`emulator/lx`); see
-[`emulator/lx/README.md`](emulator/lx/README.md) for building it (CMake + SDL2)
-and its options:
-
 ```bash
 cd ~/projects/hww/_z80/aleste-xi-bios/emulator
-cmake -S . -B build && cmake --build build
-./build/alestelx -a LXDOS.DSK ../output/LX.ROM
+./build/alestelx -a ../output/LXDOS.DSK ../output/LX.ROM
 ```
+
+[`emulator/lx/README.md`](emulator/lx/README.md) lists the options, and the
+user guide is `emulator/lx/USAGE.md`. To debug with GDB or DeZog (VS Code),
+start it with `--gdb 2159` (guide: `emulator/lx/GDB.md`); `--headless` runs it
+without a window for automated tests (the CI boots LX-DOS this way).
 
 ---
 
@@ -282,7 +286,8 @@ It provides:
 - The video modes exposed by the CRTC driver.
 - The 12-bit palette.
 - The video buffer layout planned for the future FPGA implementation.
-- An **in-emulator debugger** whose interface is rendered over the emulated screen, allowing you to debug the machine from within its own environment.
+- The LX-GPU, from the same repository as its RTL, so the GPU programs behave the same in the emulator and on the FPGA.
+- A **debugger** in the terminal (breakpoints by logical or physical address, instruction history, memory as the CPU sees it or physical) and a **GDB remote protocol server**, so gdb-multiarch or DeZog (VS Code) can debug the machine.
 
 The emulator therefore serves as a reference implementation for the planned hardware.
 
@@ -296,7 +301,7 @@ One of the project's goals is to make it possible to boot the same BIOS image on
 
 The following components are available:
 
-- The emulator builds and runs a Z80 image.
+- The emulator (`alestelx`) runs the BIOS and LX-DOS, with the LX-GPU, for Linux and Windows; GitHub Actions builds both and publishes releases.
 - The bundled Z80 CPU emulation dependency builds.
 - The BIOS and driver source trees, along with their C and assembly interfaces, are in place.
 - The BIOS and LX-DOS build into `output/LX.ROM` and `output/LXDOS.SYS` (see *The LX BIOS, LX-DOS and the MiSTer Core*).
@@ -304,7 +309,6 @@ The following components are available:
 The following areas remain incomplete:
 
 - Some drivers, including `video` and `storage`, are stubs; parts of `services/` are planned or unfinished.
-- The debugger is functional but does not implement all intended features.
 
 The main reason to explore or fork this repository is its **architecture and development workflow**, not its completeness as a finished product.
 
@@ -317,7 +321,7 @@ If you want to use Aleste LX as a starting point for your own machine, the recom
 1. **Define the memory map and hardware ports** in `inc/hardware/` and `include/hardware/`.
 2. **Specify the driver interfaces** in `inc/drivers/` and `include/drivers/`, including method layouts and error codes.
 3. **Implement the drivers** in `drivers/` using assembly and the conventions established in `inc/bios/drivers.inc`.
-4. **Implement the virtual hardware** in `emulator/src/`, including ports, MMU, video, and audio, so the emulator behaves like the intended hardware.
+4. **Implement the virtual hardware** in `emulator/lx/` (`machine.cpp`), including ports, MMU, video, and audio, so the emulator behaves like the intended hardware.
 5. **Write applications** against the public interfaces in `include/`. Once the emulator supports the required functionality and the hardware implements compatible interfaces, the same application code can be used on the physical platform.
 
 You do not need an FPGA to get started. You need a contract — the driver interface — and a reference implementation — the emulator.
