@@ -22,7 +22,7 @@ public:
     bool load_bootloader_hex(const std::string& path);
     void write_rom(uint16_t addr, uint32_t word) { gpu_.write_rom(addr, word); }
 
-    // 8-битный MMIO-интерфейс для Z80 (регистры 0x00..0x04)
+    // 8-битный MMIO-интерфейс для Z80 (регистры 0x00..0x05; чтение 0x05 = IRQ_CODE с подтверждением)
     uint8_t read(uint8_t reg);
     void    write(uint8_t reg, uint8_t val);
 

@@ -28,8 +28,9 @@ void GpuMmio::reset() {
 }
 
 uint8_t GpuMmio::read(uint8_t reg) {
-    // В новом RTL хост-интерфейс занимает 5 регистров (0x00..0x04):
-    // 0..2: GPU_ADDR0..2, 3: COMMAND, 4: STATUS ({HALT, RESULT[6:0]})
+    // В новом RTL хост-интерфейс занимает 6 регистров (0x00..0x05):
+    // 0..2: GPU_ADDR0..2, 3: COMMAND, 4: STATUS ({HALT, RESULT[6:0]}),
+    // 5: IRQ_CODE (чтение подтверждает прерывание)
     return host_.read(reg & 0x07);
 }
 
