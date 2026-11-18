@@ -14,9 +14,9 @@ on:
     # ignored (the paths filter doesn't apply to tags)
     branches: [ '**' ]
     tags: [ 'alestelx-v*' ]
-    paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
+    paths: [ 'emulator/**', 'deps/z80ex/**', 'deps/lx-gpu-rtl', '.github/workflows/alestelx.yml' ]
   pull_request:
-    paths: [ 'emulator/**', 'deps/z80ex/**', '.github/workflows/alestelx.yml' ]
+    paths: [ 'emulator/**', 'deps/z80ex/**', 'deps/lx-gpu-rtl', '.github/workflows/alestelx.yml' ]
   workflow_dispatch:
 
 env:
@@ -28,6 +28,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true            # deps/lx-gpu-rtl (LX-GPU)
 
       - name: Install SDL2
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
@@ -94,6 +96,8 @@ jobs:
       VCPKG_ROOT: C:\vcpkg
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true            # deps/lx-gpu-rtl (LX-GPU)
 
       - name: Cache vcpkg packages
         uses: actions/cache@v4

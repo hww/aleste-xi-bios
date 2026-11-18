@@ -61,7 +61,7 @@ disk: $(OUTPUT_DIR)/LXDOS.DSK
 
 # LX-DOS boot floppy: LXDOS.SYS, the test programs, the images and the test MOD
 DISK_FILES = dos/disk/README.TXT dos/test/*.COM dos/test/LXDEMO.MOD \
-	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/zex/*.COM
+	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/gpu/*.COM dos/test/zex/*.COM
 $(OUTPUT_DIR)/LXDOS.DSK: $(DOS) $(wildcard $(DISK_FILES)) tools/make_msxdisk.py
 	rm -rf $(BUILD_DIR)/disk
 	mkdir -p $(BUILD_DIR)/disk $(OUTPUT_DIR)

@@ -19,6 +19,7 @@
 #include <z80ex.h>
 #include "fdc765.h"
 #include "tape.h"
+#include "gpu_mmio.h"
 
 namespace lx {
 
@@ -76,6 +77,7 @@ public:
     // Estado para el depurador y las pruebas
     Z80EX_CONTEXT* cpu = nullptr;
     std::vector<uint8_t> mem;
+    lx::GpuMmio gpu;                 // LX-GPU (hww): pagina MMIO 3, linea 5 del PIC
     uint64_t cycles = 0;
     double   cpu_hz() const { return legacy() ? 4e6 : 54e6 / (mmu_clock + 1); }
     bool     legacy() const { return !(mmu_control & 0x02); }

@@ -8,6 +8,7 @@
 //   DMA          rtl/core/lx/lx_dma.sv        MS2    rtl/core/lx/lx_ms2.sv
 //   teclado      rtl/core/lx/lx_input.sv      765    rtl/core/cpc/u765.sv
 #include "machine.h"
+#include "gpu_boot_rom.h"
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -28,6 +29,7 @@ static Z80EX_BYTE cb_intread(Z80EX_CONTEXT*, void* u)                       { re
 
 Machine::Machine() : mem(MEM_SIZE, 0), fb(SCREEN_W * SCREEN_H, 0xFF000000) {
     cpu = z80ex_create(cb_mread, this, cb_mwrite, this, cb_pread, this, cb_pwrite, this, cb_intread, this);
+    gpu.attach_memory(mem.data(), MEM_SIZE);         // la GPU ve la misma memoria fisica (16 MB)
     reset();
 }
 
@@ -74,6 +76,8 @@ void Machine::reset() {
     memset(bank, 0, sizeof(bank));
     supervisor = true; exit_pending = false; int_hold = false;
     pic_mask = pic_pending = 0; pic_vector = 0; irq_lines = irq_prev = 0;
+    gpu.reset();                                        // LX-GPU parada; el cargador en ROM 0-31
+    for (int i = 0; i < 32; i++) gpu.write_rom(i, GPU_BOOT_ROM[i]);
     tmr_ctrl = 0; tmr_reload = tmr_count = tmr_ticks = 0;
     rtc_ram[10] = 0x26; rtc_ram[11] = 0x06;             // como el core: binario, 24 h
     pal_index = pal_ctrl = pal_mod = 0; border = 0x888;
@@ -202,6 +206,7 @@ void Machine::pic_update() {
     set_line(0, fdc.irq());           // INT de la disquetera (como u765.sv: busqueda, ejecucion, resultado)
     set_line(1, dma_done && (dma_ctrl & 0x08));
     set_line(3, ms2_irq_stat != 0);
+    set_line(5, gpu.irq());           // LX-GPU (instruccion IRQ del microcodigo)
     set_line(7, (kin_ctrl & 1) && !kq.empty());
 }
 
@@ -505,6 +510,9 @@ uint8_t Machine::mmio_read(uint32_t a) {
             return ~k;
         }
         return 0xFF;
+    case 3:                                             // LX-GPU: 0-2 GPU_ADDR, 3 COMMAND, 4 STATUS
+        if (r < 8) return gpu.read(r);
+        return 0xFF;
     case 9:
         if (r == 0x00) return fdc.read_status();
         if (r == 0x01) return fdc.read_data();
@@ -558,6 +566,9 @@ void Machine::mmio_write(uint32_t a, uint8_t v) {
         break;
     case 7: ms2_write(r, v); break;
     case 8: if (r == 0x03) kin_ctrl = v; break;
+    case 3:
+        if (r < 8) gpu.write(r, v);
+        break;
     case 9:
         if (r == 0x01) fdc.write_data(v);
         else if (r == 0x02) fdc.motor(v & 1);
@@ -648,6 +659,7 @@ int Machine::step() {
         if ((pic_pending & pic_mask) && !int_hold && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
         else t = z80ex_step(cpu);
         if (t <= 0) t = 4;
+        gpu.tick(t);                                    // GPU a 54 MHz: 3 ciclos por cada uno del Z80
     }
     cycles += t;
     frame_acc += t;

@@ -18,4 +18,8 @@ Supervisor and user mode (the syscall protocol):
                       the MMU switches maps
   VBTEST              VBlank interrupts with a program running
   FDCINT              the floppy INT on PIC line 0 (expects 0101010)
+
+LX-GPU:
+  GPUTEST             loads a microcode packet and fills 256 bytes at
+                      800000h; expects 'GPU status: 80' and OK
 
