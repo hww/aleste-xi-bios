@@ -22,4 +22,12 @@ Supervisor and user mode (the syscall protocol):
 LX-GPU:
   GPUTEST             loads a microcode packet and fills 256 bytes at
                       800000h; expects 'GPU status: 80' and OK
+  GPULOOP             hardware loops: 10 turns, and 3 x CALL x 4
+                      (R0 = 000A and 000C)
+  GPUCHW              channel writes and reads in 8 bpp, 4 bpp, LO8,
+                      HI8 and 16 bpp; shows 800000h-80008Fh
+  GPUSPR              16x16 sprite onto a 320x200 8 bpp screen (CH0 to
+                      CH1); expects 'wrong bytes 00'
+  GPUIRQ              the GPU interrupt (PIC line 5) and IRQ_CODE
+  (all of them end with OK)
 

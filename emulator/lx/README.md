@@ -14,8 +14,10 @@ or linear addressing (R20) and 2 to 16 bytes per character (R21); the
 Emulated: 16 MB of physical memory, native MMU (slots, banks, E0h-FFh,
 supervisor/user, syscall, traps), PIC and system timer, MC146818 clock (PC
 time), palette and CRTC with the LX extended registers (linear 1/2/4 bpp
-modes), DMA/blitter, Magic Sound 2 (4 channels, 48 kHz), PS/2 keyboard (US or
-Spanish layout) and the uPD765 floppy controller with 720 KB MSX-DOS images
+modes), DMA/blitter, the LX-GPU (MMIO page 3, PIC line 5; the C++ model of
+`deps/lx-gpu-rtl`, the repository the core takes the GPU RTL from), Magic
+Sound 2 (4 channels, 48 kHz), PS/2 keyboard (US or Spanish layout) and the
+uPD765 floppy controller with 720 KB MSX-DOS images
 (read and write, two drives). CPU: z80ex at 18 MHz, 60 Hz VBlank.
 
 The PC keyboard feeds both the PS/2 event queue the BIOS reads and the
@@ -73,7 +75,7 @@ booting from `alestedos-dev.dsk` (FOTON-127 BIOS, COMMAND 2.2A, DIR, disk
 change), MAG.COM playing the STM songs of `mag-player.dsk`, serial mouse and
 tape loading.
 
-Not yet in native mode: IPC and the graphics accelerator.
+Not yet in native mode: IPC.
 
 ## Automatic builds
 
@@ -214,6 +216,10 @@ LX-DOS use it.
 | MAPTEST2.COM (`tests/maptest2.asm`): on a map switch (trap or exit), which map supplies the opcode and the operand | the opcode from the old map, the operand and what follows from the new one, as in the core |
 | FDCINT.COM (`../dos/test/sys/fdcint.asm`): the floppy INT on PIC line 0 (idle, after a seek, after SENSE INT, READ ID result, after it, READ DATA execution, after it) | `0101010`, as the uPD765 without DMA (also the PPI PB1 bit in 520EX mode) |
 | GPUTEST.COM (`../dos/test/gpu/gputest.asm`): the LX-GPU from the Z80 (MMIO page 3): copies a microcode packet ([SIZE, START, words], `fill.asm` assembled with lx-gpu-rtl's `tools/asm`) to 940000h, sets GPU_ADDR and START, waits for HALT | `GPU status: 80` and OK: 256 bytes at 800000h filled with 5Ah, the byte after untouched |
+| GPULOOP.COM (`../dos/test/gpu/gpuloop.asm`): lx-gpu-rtl's test_loop and test_outer_loop (hardware loops; a CALL in a loop, with another loop in the subroutine saving LOOP_CNT, LOOP_TGT and SHADOW), storing R0 in memory | R0 = 000Ah and 000Ch, status 80, OK |
+| GPUCHW.COM (`gpuchw.asm`): channel writes and reads in 8 bpp, 4 bpp, LO8, HI8 and 16 bpp, over a known background; shows 800000h-80008Fh | the table in `chwexp.inc` (pixel 0 is the high half of the 16-bit word), OK |
+| GPUSPR.COM (`gpuspr.asm`): lx-gpu-rtl's test_sprite, a 16x16 sprite with transparency onto a 320x200 8 bpp screen (CH0 reads while CH1 writes); checks the whole 16 KB bank against `mkspr.py`'s list | `wrong bytes 00`, OK |
+| GPUIRQ.COM (`gpuirq.asm`): `IRQ 42h`, a wait, `IRQ 43h`; PIC line 5 and IRQ_CODE (register 5, reading it acknowledges) | pending, 42, cleared; status 80, pending again, 43, cleared; OK |
 | VIEW.COM and TUNNEL.COM on LXDOS.DSK (LX-DOS graphics, AlesteLX_MiSTer) | the four sample .LXI images; the tunnel with its rotating palette |
 | GDB server (`tests/gdb_rsp_test.py`) | target.xml, registers, memory (logical and physical), breakpoint at `_main`, continue, step, monitor, Ctrl-C and kill |
 | keyboard matrix (`ctest`) | the 92 keys of the RTL table, each in its row and bit |
