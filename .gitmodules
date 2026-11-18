@@ -1,0 +1,3 @@
+[submodule "depts/lx-gpu-rtl"]
+	path = deps/lx-gpu-rtl
+	url = https://github.com/hww/lx-gpu-rtl
