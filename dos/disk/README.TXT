@@ -18,8 +18,8 @@ Music and graphics:
 Supervisor and user mode (the syscall protocol):
   SYSTEST             OUT (F2h),A syscalls from user mode, exit on RET,
                       interrupt hold (press keys during its 1 s wait)
-  MAPTEST, MAPTEST2   which map each instruction is fetched from when
-                      the MMU switches maps
+  MAPTEST, MAPTEST2   leaving the supervisor on a RET: which map the code
+                      after it and the RET's stack come from (expects 2)
   VBTEST              VBlank interrupts with a program running
   FDCINT              the floppy INT on PIC line 0 (expects 0101010)
 
