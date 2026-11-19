@@ -79,6 +79,7 @@ void Machine::reset() {
     gpu.reset();                                        // LX-GPU parada; el cargador en ROM 0-31
     for (int i = 0; i < 32; i++) gpu.write_rom(i, GPU_BOOT_ROM[i]);
     tmr_ctrl = 0; tmr_reload = tmr_count = tmr_ticks = 0;
+    us_count = us_snap = 0; us_m1 = 4;
     rtc_ram[10] = 0x26; rtc_ram[11] = 0x06;             // como el core: binario, 24 h
     pal_index = pal_ctrl = pal_mod = 0; border = 0x888;
     memset(crtc, 0, sizeof(crtc));
@@ -109,6 +110,7 @@ uint32_t Machine::translate(uint16_t addr) const {
 }
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
+    if (m1 && us_m1 < 4) us_m1++;                        // para la copia del temporizador
     if (legacy()) {
         // al pasar a legacy (el 520EX), como en mmu_native.sv: la salida
         // pendiente se completa en el M1 siguiente
@@ -177,6 +179,11 @@ void Machine::mmu_write(uint8_t r, uint8_t v) {
 uint8_t Machine::pread(uint16_t port) {
     if (legacy()) return leg_pread(port);
     uint8_t p = port & 0xFF;
+    if (p >= 0xF4 && p <= 0xF7) {                       // temporizador: tambien con el bloqueo
+        if (us_m1 >= 4) us_snap = us_count;
+        us_m1 = 0;
+        return (uint8_t)(us_snap >> (8 * (p & 3)));
+    }
     if (!supervisor && (mmu_control & 0x10)) return 0xFF;
     if (p < 0x80) return mmio_read(0xFF0000 + mmu_page * 128 + p);
     if (p >= 0xE0) return mmu_read(p, port);
@@ -218,6 +225,7 @@ uint8_t Machine::intread() {
 }
 
 void Machine::timer_us(int n) {
+    us_count += (uint32_t)n;
     while (n--) {
         if (++ms_acc >= 1000) { ms_acc = 0; tmr_ticks++; }
         if (tmr_ctrl & 1) {

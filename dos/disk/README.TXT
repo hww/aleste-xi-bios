@@ -21,6 +21,8 @@ Supervisor and user mode (the syscall protocol):
   MAPTEST, MAPTEST2   leaving the supervisor on a RET: which map the code
                       after it and the RET's stack come from (expects 2)
   VBTEST              VBlank interrupts with a program running
+  TIMTEST             the 1 MHz timer at F4h-F7h: rate, the latch, and
+                      reading it in user mode with the ports locked (OK)
   FDCINT              the floppy INT on PIC line 0 (expects 0101010)
 
 LX-GPU:

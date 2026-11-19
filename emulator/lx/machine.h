@@ -130,6 +130,10 @@ private:
     uint16_t tmr_reload = 0, tmr_count = 0, tmr_ticks = 0;
     uint8_t  tmr_cnt_hi_l = 0, tmr_ticks_hi_l = 0;
     double   us_acc = 0, ms_acc = 0;
+    // temporizador libre de 1 MHz en F4h-F7h (como mmu_native.sv): la copia de
+    // los 32 bits vale mientras las lecturas lleguen con como mucho tres M1
+    uint32_t us_count = 0, us_snap = 0;
+    int      us_m1 = 4;
     void     timer_us(int n);
 
     // ---- Reloj MC146818 (pagina 0, 60h/61h)

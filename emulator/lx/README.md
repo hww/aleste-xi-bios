@@ -12,8 +12,8 @@ or linear addressing (R20) and 2 to 16 bytes per character (R21); the
 320x200x256 mode (8 bpp linear) matches the core pixel for pixel.
 
 Emulated: 16 MB of physical memory, native MMU (slots, banks, E0h-FFh,
-supervisor/user, syscall, traps), PIC and system timer, MC146818 clock (PC
-time), palette and CRTC with the LX extended registers (linear 1/2/4 bpp
+supervisor/user, syscall, traps, the 1 MHz timer at F4h-F7h), PIC and
+system timer, MC146818 clock (PC time), palette and CRTC with the LX extended registers (linear 1/2/4 bpp
 modes), DMA/blitter, the LX-GPU (MMIO page 3, PIC line 5; the C++ model of
 `deps/lx-gpu-rtl`, the repository the core takes the GPU RTL from), Magic
 Sound 2 (4 channels, 48 kHz), PS/2 keyboard (US or Spanish layout) and the
@@ -215,6 +215,7 @@ LX-DOS use it.
 | GFX8TEST.COM (`tests/gfx8test.asm`): 320x200, 256 colours, 8 bpp linear | identical, pixel by pixel, to the core in simulation |
 | SYSTEST.COM (`tests/systest.asm`): `OUT (F2h),A` syscalls from user mode, exit on RET and interrupt hold (control bit 3), both hww's proposals; private user stack, no DI/EI; keys pressed during its 1 s wait | same result as the core in simulation: 20009 calls, 8 interrupts taken in user mode, private pages OK; 427 cycles per loop iteration (a null call plus the loop). With `VBLANK equ 1`: 69 interrupts in user mode, all returning through the RET (103 in the core simulation, same result) |
 | MAPTEST.COM and MAPTEST2.COM (`../dos/test/sys/`): leaving the supervisor on a RET (armed by `OUT (F0h),A`), which map the next instructions and the RET's stack come from | 2, 2, 2 and B = 2: all from the user's map, as in the core |
+| TIMTEST.COM (`../dos/test/sys/timtest.asm`): the free-running 1 MHz timer at F4h-F7h (in the MMU, hww's layout): 100 ms of the system timer, the latch (reads one NOP apart see the same copy, eight NOPs apart a new one), and a read in user mode with the port lock | 186A0h µs (±1), same/different, user value between the supervisor's two, OK; as in the core |
 | FDCINT.COM (`../dos/test/sys/fdcint.asm`): the floppy INT on PIC line 0 (idle, after a seek, after SENSE INT, READ ID result, after it, READ DATA execution, after it) | `0101010`, as the uPD765 without DMA (also the PPI PB1 bit in 520EX mode) |
 | GPUTEST.COM (`../dos/test/gpu/gputest.asm`): the LX-GPU from the Z80 (MMIO page 3): copies a microcode packet ([SIZE, START, words], `fill.asm` assembled with lx-gpu-rtl's `tools/asm`) to 940000h, sets GPU_ADDR and START, waits for HALT | `GPU status: 80` and OK: 256 bytes at 800000h filled with 5Ah, the byte after untouched |
 | GPULOOP.COM (`../dos/test/gpu/gpuloop.asm`): lx-gpu-rtl's test_loop and test_outer_loop (hardware loops; a CALL in a loop, with another loop in the subroutine saving LOOP_CNT, LOOP_TGT and SHADOW), storing R0 in memory | R0 = 000Ah and 000Ch, status 80, OK |
