@@ -1,12 +1,13 @@
 ; gpuchw.asm - GPUCHW.COM: escritura y lectura por los canales de la LX-GPU
-; en cada formato (8 bpp, 4 bpp, LO8, HI8, 16 bpp), desde el Z80.
+; en cada formato (8 bpp, 4 bpp, 16 bpp, y un byte por palabra con 8 bpp y
+; STEP 2), desde el Z80.
 ; Shaeon (Carlos Palmero), para el emulador alestelx y el core AlesteLX_MiSTer.
 ;
 ; Llena 800000h-8000FFh con EEh y pone 01 02 03 04 en 800050h; la GPU
 ; (chwrite.asm) escribe y lee por los canales, y el Z80 compara 800000h-80008Fh
-; con la tabla de chwexp.inc y lo muestra. En 8 y 4 bpp la posicion 0 es la
-; parte alta de la palabra de 16 bits, asi que en memoria (little-endian) el
-; pixel 0 de 8 bpp esta en el byte impar.
+; con la tabla de chwexp.inc y lo muestra. Los pixeles van como los lee el
+; video del Aleste: los bytes por direccion y, dentro de cada byte, desde los
+; bits altos (8 bpp: el pixel i es el byte i; 4 bpp: bits 7-4 y luego 3-0).
 ; pasmo gpuchw.asm GPUCHW.COM
         org 100h
         ld de, m_hello
@@ -92,7 +93,7 @@ rslt:   jp result
         include "chwrite.inc"
         include "chwexp.inc"
 
-m_hello:  db "GPUCHW: LX-GPU channels, 8/4 bpp, LO8, HI8, 16 bpp", 13, 10, "$"
+m_hello:  db "GPUCHW: LX-GPU channels, 8/4/16 bpp, 8 bpp STEP 2", 13, 10, "$"
 m_status: db "status $"
 st:       db 0
 bad:      db 0

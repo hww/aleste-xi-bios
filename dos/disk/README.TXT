@@ -24,8 +24,8 @@ LX-GPU:
                       800000h; expects 'GPU status: 80' and OK
   GPULOOP             hardware loops: 10 turns, and 3 x CALL x 4
                       (R0 = 000A and 000C)
-  GPUCHW              channel writes and reads in 8 bpp, 4 bpp, LO8,
-                      HI8 and 16 bpp; shows 800000h-80008Fh
+  GPUCHW              channel writes and reads in 8 bpp, 4 bpp,
+                      16 bpp and 8 bpp STEP 2; shows 800000h-80008Fh
   GPUSPR              16x16 sprite onto a 320x200 8 bpp screen (CH0 to
                       CH1); expects 'wrong bytes 00'
   GPUIRQ              the GPU interrupt (PIC line 5) and IRQ_CODE

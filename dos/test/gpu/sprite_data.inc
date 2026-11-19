@@ -1,362 +1,362 @@
 ; generado con mkspr.py
 ; el sprite, tal como queda en 800400h-8004FFh
 spr_src:
-        db 081h, 000h, 000h, 082h, 085h, 084h, 087h, 000h, 000h, 088h, 08Bh, 08Ah, 08Dh, 000h, 000h, 08Eh
-        db 091h, 090h, 093h, 000h, 000h, 094h, 097h, 096h, 099h, 000h, 000h, 09Ah, 09Dh, 09Ch, 09Fh, 000h
-        db 000h, 0A0h, 0A3h, 0A2h, 0A5h, 000h, 000h, 0A6h, 0A9h, 0A8h, 0ABh, 000h, 000h, 0ACh, 0AFh, 0AEh
-        db 0B1h, 000h, 000h, 0B2h, 0B5h, 0B4h, 0B7h, 000h, 000h, 0B8h, 0BBh, 0BAh, 0BDh, 000h, 000h, 0BEh
-        db 0C1h, 0C0h, 0C3h, 000h, 000h, 0C4h, 0C7h, 0C6h, 0C9h, 000h, 000h, 0CAh, 0CDh, 0CCh, 0CFh, 000h
-        db 000h, 0D0h, 0D3h, 0D2h, 0D5h, 000h, 000h, 0D6h, 0D9h, 0D8h, 0DBh, 000h, 000h, 0DCh, 0DFh, 0DEh
-        db 0E1h, 000h, 000h, 0E2h, 0E5h, 0E4h, 0E7h, 000h, 000h, 0E8h, 0EBh, 0EAh, 0EDh, 000h, 000h, 0EEh
-        db 0F1h, 0F0h, 0F3h, 000h, 000h, 0F4h, 0F7h, 0F6h, 0F9h, 000h, 000h, 0FAh, 0FDh, 0FCh, 0FFh, 000h
-        db 000h, 080h, 083h, 082h, 085h, 000h, 000h, 086h, 089h, 088h, 08Bh, 000h, 000h, 08Ch, 08Fh, 08Eh
-        db 091h, 000h, 000h, 092h, 095h, 094h, 097h, 000h, 000h, 098h, 09Bh, 09Ah, 09Dh, 000h, 000h, 09Eh
-        db 0A1h, 0A0h, 0A3h, 000h, 000h, 0A4h, 0A7h, 0A6h, 0A9h, 000h, 000h, 0AAh, 0ADh, 0ACh, 0AFh, 000h
-        db 000h, 0B0h, 0B3h, 0B2h, 0B5h, 000h, 000h, 0B6h, 0B9h, 0B8h, 0BBh, 000h, 000h, 0BCh, 0BFh, 0BEh
-        db 0C1h, 000h, 000h, 0C2h, 0C5h, 0C4h, 0C7h, 000h, 000h, 0C8h, 0CBh, 0CAh, 0CDh, 000h, 000h, 0CEh
-        db 0D1h, 0D0h, 0D3h, 000h, 000h, 0D4h, 0D7h, 0D6h, 0D9h, 000h, 000h, 0DAh, 0DDh, 0DCh, 0DFh, 000h
-        db 000h, 0E0h, 0E3h, 0E2h, 0E5h, 000h, 000h, 0E6h, 0E9h, 0E8h, 0EBh, 000h, 000h, 0ECh, 0EFh, 0EEh
-        db 0F1h, 000h, 000h, 0F2h, 0F5h, 0F4h, 0F7h, 000h, 000h, 0F8h, 0FBh, 0FAh, 0FDh, 000h, 000h, 0FEh
+        db 000h, 081h, 082h, 000h, 084h, 085h, 000h, 087h, 088h, 000h, 08Ah, 08Bh, 000h, 08Dh, 08Eh, 000h
+        db 090h, 091h, 000h, 093h, 094h, 000h, 096h, 097h, 000h, 099h, 09Ah, 000h, 09Ch, 09Dh, 000h, 09Fh
+        db 0A0h, 000h, 0A2h, 0A3h, 000h, 0A5h, 0A6h, 000h, 0A8h, 0A9h, 000h, 0ABh, 0ACh, 000h, 0AEh, 0AFh
+        db 000h, 0B1h, 0B2h, 000h, 0B4h, 0B5h, 000h, 0B7h, 0B8h, 000h, 0BAh, 0BBh, 000h, 0BDh, 0BEh, 000h
+        db 0C0h, 0C1h, 000h, 0C3h, 0C4h, 000h, 0C6h, 0C7h, 000h, 0C9h, 0CAh, 000h, 0CCh, 0CDh, 000h, 0CFh
+        db 0D0h, 000h, 0D2h, 0D3h, 000h, 0D5h, 0D6h, 000h, 0D8h, 0D9h, 000h, 0DBh, 0DCh, 000h, 0DEh, 0DFh
+        db 000h, 0E1h, 0E2h, 000h, 0E4h, 0E5h, 000h, 0E7h, 0E8h, 000h, 0EAh, 0EBh, 000h, 0EDh, 0EEh, 000h
+        db 0F0h, 0F1h, 000h, 0F3h, 0F4h, 000h, 0F6h, 0F7h, 000h, 0F9h, 0FAh, 000h, 0FCh, 0FDh, 000h, 0FFh
+        db 080h, 000h, 082h, 083h, 000h, 085h, 086h, 000h, 088h, 089h, 000h, 08Bh, 08Ch, 000h, 08Eh, 08Fh
+        db 000h, 091h, 092h, 000h, 094h, 095h, 000h, 097h, 098h, 000h, 09Ah, 09Bh, 000h, 09Dh, 09Eh, 000h
+        db 0A0h, 0A1h, 000h, 0A3h, 0A4h, 000h, 0A6h, 0A7h, 000h, 0A9h, 0AAh, 000h, 0ACh, 0ADh, 000h, 0AFh
+        db 0B0h, 000h, 0B2h, 0B3h, 000h, 0B5h, 0B6h, 000h, 0B8h, 0B9h, 000h, 0BBh, 0BCh, 000h, 0BEh, 0BFh
+        db 000h, 0C1h, 0C2h, 000h, 0C4h, 0C5h, 000h, 0C7h, 0C8h, 000h, 0CAh, 0CBh, 000h, 0CDh, 0CEh, 000h
+        db 0D0h, 0D1h, 000h, 0D3h, 0D4h, 000h, 0D6h, 0D7h, 000h, 0D9h, 0DAh, 000h, 0DCh, 0DDh, 000h, 0DFh
+        db 0E0h, 000h, 0E2h, 0E3h, 000h, 0E5h, 0E6h, 000h, 0E8h, 0E9h, 000h, 0EBh, 0ECh, 000h, 0EEh, 0EFh
+        db 000h, 0F1h, 0F2h, 000h, 0F4h, 0F5h, 000h, 0F7h, 0F8h, 000h, 0FAh, 0FBh, 000h, 0FDh, 0FEh, 000h
 ; los bytes que cambia la GPU en el banco 2 (desplazamiento, valor), en orden
 spr_patch:
-        dw 00564h
+        dw 00565h
         db 081h
-        dw 00567h
+        dw 00566h
         db 082h
         dw 00568h
-        db 085h
-        dw 00569h
         db 084h
-        dw 0056Ah
+        dw 00569h
+        db 085h
+        dw 0056Bh
         db 087h
-        dw 0056Dh
+        dw 0056Ch
         db 088h
         dw 0056Eh
-        db 08Bh
-        dw 0056Fh
         db 08Ah
-        dw 00570h
+        dw 0056Fh
+        db 08Bh
+        dw 00571h
         db 08Dh
-        dw 00573h
+        dw 00572h
         db 08Eh
         dw 006A4h
-        db 091h
-        dw 006A5h
         db 090h
-        dw 006A6h
+        dw 006A5h
+        db 091h
+        dw 006A7h
         db 093h
-        dw 006A9h
+        dw 006A8h
         db 094h
         dw 006AAh
-        db 097h
-        dw 006ABh
         db 096h
-        dw 006ACh
+        dw 006ABh
+        db 097h
+        dw 006ADh
         db 099h
-        dw 006AFh
+        dw 006AEh
         db 09Ah
         dw 006B0h
-        db 09Dh
-        dw 006B1h
         db 09Ch
-        dw 006B2h
+        dw 006B1h
+        db 09Dh
+        dw 006B3h
         db 09Fh
-        dw 007E5h
+        dw 007E4h
         db 0A0h
         dw 007E6h
-        db 0A3h
-        dw 007E7h
         db 0A2h
-        dw 007E8h
+        dw 007E7h
+        db 0A3h
+        dw 007E9h
         db 0A5h
-        dw 007EBh
+        dw 007EAh
         db 0A6h
         dw 007ECh
-        db 0A9h
-        dw 007EDh
         db 0A8h
-        dw 007EEh
+        dw 007EDh
+        db 0A9h
+        dw 007EFh
         db 0ABh
-        dw 007F1h
+        dw 007F0h
         db 0ACh
         dw 007F2h
-        db 0AFh
-        dw 007F3h
         db 0AEh
-        dw 00924h
+        dw 007F3h
+        db 0AFh
+        dw 00925h
         db 0B1h
-        dw 00927h
+        dw 00926h
         db 0B2h
         dw 00928h
-        db 0B5h
-        dw 00929h
         db 0B4h
-        dw 0092Ah
+        dw 00929h
+        db 0B5h
+        dw 0092Bh
         db 0B7h
-        dw 0092Dh
+        dw 0092Ch
         db 0B8h
         dw 0092Eh
-        db 0BBh
-        dw 0092Fh
         db 0BAh
-        dw 00930h
+        dw 0092Fh
+        db 0BBh
+        dw 00931h
         db 0BDh
-        dw 00933h
+        dw 00932h
         db 0BEh
         dw 00A64h
-        db 0C1h
-        dw 00A65h
         db 0C0h
-        dw 00A66h
+        dw 00A65h
+        db 0C1h
+        dw 00A67h
         db 0C3h
-        dw 00A69h
+        dw 00A68h
         db 0C4h
         dw 00A6Ah
-        db 0C7h
-        dw 00A6Bh
         db 0C6h
-        dw 00A6Ch
+        dw 00A6Bh
+        db 0C7h
+        dw 00A6Dh
         db 0C9h
-        dw 00A6Fh
+        dw 00A6Eh
         db 0CAh
         dw 00A70h
-        db 0CDh
-        dw 00A71h
         db 0CCh
-        dw 00A72h
+        dw 00A71h
+        db 0CDh
+        dw 00A73h
         db 0CFh
-        dw 00BA5h
+        dw 00BA4h
         db 0D0h
         dw 00BA6h
-        db 0D3h
-        dw 00BA7h
         db 0D2h
-        dw 00BA8h
+        dw 00BA7h
+        db 0D3h
+        dw 00BA9h
         db 0D5h
-        dw 00BABh
+        dw 00BAAh
         db 0D6h
         dw 00BACh
-        db 0D9h
-        dw 00BADh
         db 0D8h
-        dw 00BAEh
+        dw 00BADh
+        db 0D9h
+        dw 00BAFh
         db 0DBh
-        dw 00BB1h
+        dw 00BB0h
         db 0DCh
         dw 00BB2h
-        db 0DFh
-        dw 00BB3h
         db 0DEh
-        dw 00CE4h
+        dw 00BB3h
+        db 0DFh
+        dw 00CE5h
         db 0E1h
-        dw 00CE7h
+        dw 00CE6h
         db 0E2h
         dw 00CE8h
-        db 0E5h
-        dw 00CE9h
         db 0E4h
-        dw 00CEAh
+        dw 00CE9h
+        db 0E5h
+        dw 00CEBh
         db 0E7h
-        dw 00CEDh
+        dw 00CECh
         db 0E8h
         dw 00CEEh
-        db 0EBh
-        dw 00CEFh
         db 0EAh
-        dw 00CF0h
+        dw 00CEFh
+        db 0EBh
+        dw 00CF1h
         db 0EDh
-        dw 00CF3h
+        dw 00CF2h
         db 0EEh
         dw 00E24h
-        db 0F1h
-        dw 00E25h
         db 0F0h
-        dw 00E26h
+        dw 00E25h
+        db 0F1h
+        dw 00E27h
         db 0F3h
-        dw 00E29h
+        dw 00E28h
         db 0F4h
         dw 00E2Ah
-        db 0F7h
-        dw 00E2Bh
         db 0F6h
-        dw 00E2Ch
+        dw 00E2Bh
+        db 0F7h
+        dw 00E2Dh
         db 0F9h
-        dw 00E2Fh
+        dw 00E2Eh
         db 0FAh
         dw 00E30h
-        db 0FDh
-        dw 00E31h
         db 0FCh
-        dw 00E32h
+        dw 00E31h
+        db 0FDh
+        dw 00E33h
         db 0FFh
-        dw 00F65h
+        dw 00F64h
         db 080h
         dw 00F66h
-        db 083h
-        dw 00F67h
         db 082h
-        dw 00F68h
+        dw 00F67h
+        db 083h
+        dw 00F69h
         db 085h
-        dw 00F6Bh
+        dw 00F6Ah
         db 086h
         dw 00F6Ch
-        db 089h
-        dw 00F6Dh
         db 088h
-        dw 00F6Eh
+        dw 00F6Dh
+        db 089h
+        dw 00F6Fh
         db 08Bh
-        dw 00F71h
+        dw 00F70h
         db 08Ch
         dw 00F72h
-        db 08Fh
-        dw 00F73h
         db 08Eh
-        dw 010A4h
+        dw 00F73h
+        db 08Fh
+        dw 010A5h
         db 091h
-        dw 010A7h
+        dw 010A6h
         db 092h
         dw 010A8h
-        db 095h
-        dw 010A9h
         db 094h
-        dw 010AAh
+        dw 010A9h
+        db 095h
+        dw 010ABh
         db 097h
-        dw 010ADh
+        dw 010ACh
         db 098h
         dw 010AEh
-        db 09Bh
-        dw 010AFh
         db 09Ah
-        dw 010B0h
+        dw 010AFh
+        db 09Bh
+        dw 010B1h
         db 09Dh
-        dw 010B3h
+        dw 010B2h
         db 09Eh
         dw 011E4h
-        db 0A1h
-        dw 011E5h
         db 0A0h
-        dw 011E6h
+        dw 011E5h
+        db 0A1h
+        dw 011E7h
         db 0A3h
-        dw 011E9h
+        dw 011E8h
         db 0A4h
         dw 011EAh
-        db 0A7h
-        dw 011EBh
         db 0A6h
-        dw 011ECh
+        dw 011EBh
+        db 0A7h
+        dw 011EDh
         db 0A9h
-        dw 011EFh
+        dw 011EEh
         db 0AAh
         dw 011F0h
-        db 0ADh
-        dw 011F1h
         db 0ACh
-        dw 011F2h
+        dw 011F1h
+        db 0ADh
+        dw 011F3h
         db 0AFh
-        dw 01325h
+        dw 01324h
         db 0B0h
         dw 01326h
-        db 0B3h
-        dw 01327h
         db 0B2h
-        dw 01328h
+        dw 01327h
+        db 0B3h
+        dw 01329h
         db 0B5h
-        dw 0132Bh
+        dw 0132Ah
         db 0B6h
         dw 0132Ch
-        db 0B9h
-        dw 0132Dh
         db 0B8h
-        dw 0132Eh
+        dw 0132Dh
+        db 0B9h
+        dw 0132Fh
         db 0BBh
-        dw 01331h
+        dw 01330h
         db 0BCh
         dw 01332h
-        db 0BFh
-        dw 01333h
         db 0BEh
-        dw 01464h
+        dw 01333h
+        db 0BFh
+        dw 01465h
         db 0C1h
-        dw 01467h
+        dw 01466h
         db 0C2h
         dw 01468h
-        db 0C5h
-        dw 01469h
         db 0C4h
-        dw 0146Ah
+        dw 01469h
+        db 0C5h
+        dw 0146Bh
         db 0C7h
-        dw 0146Dh
+        dw 0146Ch
         db 0C8h
         dw 0146Eh
-        db 0CBh
-        dw 0146Fh
         db 0CAh
-        dw 01470h
+        dw 0146Fh
+        db 0CBh
+        dw 01471h
         db 0CDh
-        dw 01473h
+        dw 01472h
         db 0CEh
         dw 015A4h
-        db 0D1h
-        dw 015A5h
         db 0D0h
-        dw 015A6h
+        dw 015A5h
+        db 0D1h
+        dw 015A7h
         db 0D3h
-        dw 015A9h
+        dw 015A8h
         db 0D4h
         dw 015AAh
-        db 0D7h
-        dw 015ABh
         db 0D6h
-        dw 015ACh
+        dw 015ABh
+        db 0D7h
+        dw 015ADh
         db 0D9h
-        dw 015AFh
+        dw 015AEh
         db 0DAh
         dw 015B0h
-        db 0DDh
-        dw 015B1h
         db 0DCh
-        dw 015B2h
+        dw 015B1h
+        db 0DDh
+        dw 015B3h
         db 0DFh
-        dw 016E5h
+        dw 016E4h
         db 0E0h
         dw 016E6h
-        db 0E3h
-        dw 016E7h
         db 0E2h
-        dw 016E8h
+        dw 016E7h
+        db 0E3h
+        dw 016E9h
         db 0E5h
-        dw 016EBh
+        dw 016EAh
         db 0E6h
         dw 016ECh
-        db 0E9h
-        dw 016EDh
         db 0E8h
-        dw 016EEh
+        dw 016EDh
+        db 0E9h
+        dw 016EFh
         db 0EBh
-        dw 016F1h
+        dw 016F0h
         db 0ECh
         dw 016F2h
-        db 0EFh
-        dw 016F3h
         db 0EEh
-        dw 01824h
+        dw 016F3h
+        db 0EFh
+        dw 01825h
         db 0F1h
-        dw 01827h
+        dw 01826h
         db 0F2h
         dw 01828h
-        db 0F5h
-        dw 01829h
         db 0F4h
-        dw 0182Ah
+        dw 01829h
+        db 0F5h
+        dw 0182Bh
         db 0F7h
-        dw 0182Dh
+        dw 0182Ch
         db 0F8h
         dw 0182Eh
-        db 0FBh
-        dw 0182Fh
         db 0FAh
-        dw 01830h
+        dw 0182Fh
+        db 0FBh
+        dw 01831h
         db 0FDh
-        dw 01833h
+        dw 01832h
         db 0FEh
 spr_patch_end:

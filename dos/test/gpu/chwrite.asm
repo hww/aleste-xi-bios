@@ -38,31 +38,28 @@
         LDI     R2, #5
         MOV     DATA1, R2
         FLUSH   1
-; (c) LO8, AAh y BBh en las palabras del byte 020h (palabra 10h)
-        LDI     R5, #0x0580      ; FMT=5 (LO8)
+; (c) un byte por palabra (lo que era LO8): 8 bpp con STEP 2 desde el byte
+;     bajo de la palabra del byte 020h (pixel 20h): AAh y BBh
+        LDI     R5, #0x0180      ; FMT=1 (8 bpp)
         MOV     PAGE1, R5
-        LDI     R5, #1
+        LDI     R5, #2
         MOV     STEP1, R5
-        LDI     R4, #0x0010
+        LDI     R4, #0x0020
         MOV     IDX1, R4
         LDI     R2, #0x00AA
         MOV     DATA1, R2
         LDI     R2, #0x00BB
         MOV     DATA1, R2
         FLUSH   1
-; (d) HI8, CCh y DDh en las palabras del byte 030h (palabra 18h)
-        LDI     R5, #0x0680      ; FMT=6 (HI8)
-        MOV     PAGE1, R5
-        LDI     R5, #1
-        MOV     STEP1, R5
-        LDI     R4, #0x0018
+; (d) lo mismo con el byte alto (lo que era HI8): desde el pixel 31h
+        LDI     R4, #0x0031
         MOV     IDX1, R4
         LDI     R2, #0x00CC
         MOV     DATA1, R2
         LDI     R2, #0x00DD
         MOV     DATA1, R2
         FLUSH   1
-; (e) 8 bpp, un solo pixel 77h en la posicion 1 del byte 040h (pixel 41h)
+; (e) 8 bpp, un solo pixel 77h en el pixel 41h (el byte 041h)
         LDI     R5, #0x0180
         MOV     PAGE1, R5
         LDI     R5, #1
