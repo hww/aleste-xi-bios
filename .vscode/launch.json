@@ -2,11 +2,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Z80 Emulator",
+            "name": "Debug alestelx (LX-DOS)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/z80_emu",
-            "args": ["emulator/test/test.bin"],
+            "program": "${workspaceFolder}/emulator/build/alestelx",
+            "args": ["-a", "output/LXDOS.DSK", "output/LX.ROM"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -19,7 +19,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "build",
+            "preLaunchTask": "build alestelx",
             "miDebuggerPath": "/usr/bin/gdb"
         }
     ]

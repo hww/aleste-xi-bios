@@ -11,6 +11,12 @@
                 "isDefault": true
             },
             "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "build alestelx",
+            "type": "shell",
+            "command": "cmake -S emulator -B emulator/build -DCMAKE_BUILD_TYPE=Debug && cmake --build emulator/build",
+            "problemMatcher": ["$gcc"]
         }
     ]
 }

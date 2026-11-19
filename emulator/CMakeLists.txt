@@ -3,8 +3,7 @@
 # Necesita SDL2. En Windows: SDL2 de vcpkg (cmake --preset default, con
 # VCPKG_ROOT; ver CMakePresets.json) o los "development libraries" de
 # libsdl.org (SDL2_DIR apuntando a su carpeta cmake).
-# z80ex se compila desde ../deps/z80ex. El emulador original (z80_emu, con su
-# Makefile) sigue aparte.
+# z80ex se compila desde ../deps/z80ex.
 cmake_minimum_required(VERSION 3.16)
 project(alestelx C CXX)
 set(CMAKE_CXX_STANDARD 17)

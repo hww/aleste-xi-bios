@@ -100,8 +100,7 @@ aleste-xi-bios/
 │   ├── lx/              alestelx: the machine, debugger, GDB server (README, USAGE, GDB guides)
 │   ├── tests/           Keyboard matrix and GDB server tests, Z80 test programs
 │   ├── launchers/       Ready-made .bat/.sh scripts
-│   ├── disks/, roms/    520EX disks, test tape and ROM for the packages
-│   └── src/, test/      z80emu, the first prototype (superseded by alestelx)
+│   └── disks/, roms/    520EX disks, test tape and ROM for the packages
 ├── deps/z80ex/          Bundled Z80 CPU emulation library
 ├── deps/lx-gpu-rtl/     The LX-GPU: RTL, C++ model and assembler (submodule)
 ├── output/              LX.ROM (64 KB), bios_abi.asm, LXDOS.SYS (built)
