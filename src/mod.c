@@ -52,6 +52,7 @@ static uint8_t  fmt;                     /* 0 MOD, 1 STM */
 static uint8_t  init_speed;
 static uint16_t c2spd[32];               /* STM: Hz de la nota C-2 de cada instrumento */
 static uint8_t  stm_vol[4];              /* STM: columna de volumen de la fila (FFh = no) */
+static uint8_t  hits[4];                 /* notas tocadas en cada canal (para mod_voices) */
 
 static const uint8_t vib_sine[32] = {
     0, 24, 49, 74, 97, 120, 141, 161, 180, 197, 212, 224, 235, 244, 250, 253,
@@ -239,6 +240,7 @@ static void trigger(uint8_t c, uint16_t offset) {
     st = snd_step_period(chn[c].period);
     put24(voice.step, st);
     snd_play(&voice);
+    hits[c]++;
     chn[c].dirty |= 2;
 }
 
@@ -394,3 +396,13 @@ uint8_t     mod_length(void)   { return song_len; }
 uint8_t     mod_row(void)      { return row; }
 uint8_t     mod_patterns(void) { return npat; }
 const char* mod_kind(void)     { return fmt ? "STM" : "MOD"; }
+
+void mod_voices(uint8_t* out) {
+    uint8_t c;
+    for (c = 0; c < 4; c++, out += 4) {
+        out[0] = playing ? chn[c].vol : 0;
+        out[1] = hits[c];
+        out[2] = chn[c].smp;
+        out[3] = (uint8_t)(chn[c].period >> 4);
+    }
+}

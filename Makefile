@@ -59,9 +59,21 @@ rom: $(OUTPUT_DIR)/LX.ROM
 dos: $(OUTPUT_DIR)/LXDOS.SYS
 disk: $(OUTPUT_DIR)/LXDOS.DSK
 
+# MAG songs (from MAG of the 520EX Magic Sound, hww/Aleste520EX Soft/Disks):
+# three fit on the boot disk; all five on MAGSONGS.DSK (for drive B:)
+MAG_SONGS_A = dos/test/mag/songs/AXELF.STM dos/test/mag/songs/SLL1.STM dos/test/mag/songs/HEADACHE.STM
+MAG_SONGS   = $(wildcard dos/test/mag/songs/*.STM)
+songs: $(OUTPUT_DIR)/MAGSONGS.DSK
+$(OUTPUT_DIR)/MAGSONGS.DSK: $(MAG_SONGS) dos/test/mag/MAG.COM tools/make_msxdisk.py
+	rm -rf $(BUILD_DIR)/songs
+	mkdir -p $(BUILD_DIR)/songs $(OUTPUT_DIR)
+	cp $(MAG_SONGS) dos/test/mag/MAG.COM $(BUILD_DIR)/songs/
+	python3 tools/make_msxdisk.py $(BUILD_DIR)/songs -o $@
+
 # LX-DOS boot floppy: LXDOS.SYS, the test programs, the images and the test MOD
 DISK_FILES = dos/disk/README.TXT dos/test/*.COM dos/test/LXDEMO.MOD \
-	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/gpu/*.COM dos/test/zex/*.COM
+	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/gpu/*.COM dos/test/mag/*.COM dos/test/zex/*.COM \
+	$(MAG_SONGS_A)
 $(OUTPUT_DIR)/LXDOS.DSK: $(DOS) $(wildcard $(DISK_FILES)) tools/make_msxdisk.py
 	rm -rf $(BUILD_DIR)/disk
 	mkdir -p $(BUILD_DIR)/disk $(OUTPUT_DIR)
@@ -139,4 +151,4 @@ debug_vbuf:
 clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
 
-.PHONY: all rom dos disk clean preprocess debug_vbuf
+.PHONY: all rom dos disk songs clean preprocess debug_vbuf

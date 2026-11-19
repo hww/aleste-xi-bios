@@ -12,6 +12,14 @@ Tests of .COM programs:
 
 Music and graphics:
   MODPLAY LXDEMO.MOD  music in the background (MODPLAY /S stops it)
+  MAG file            plays an STM or MOD with a screen: a tribute to MAG,
+                      the Magic Sound player of the Aleste 520EX
+                      (Patisonic, 1993), in colour and drawn by the LX-GPU
+                      (stars, meters). No extension: .STM, then .MOD.
+                      Any key stops it. Songs from the original MAG disk:
+                      MAG AXELF, MAG SLL1, MAG HEADACHE (MAGSONGS.DSK in
+                      B: has all five: MAG B:CHRUSH, MAG B:TECHNO1).
+                      MAG LXDEMO also works.
   GFX8TEST, TUNNEL    320x200x256 mode
   VIEW                shows the .LXI images (a key: next one; Esc quits)
 

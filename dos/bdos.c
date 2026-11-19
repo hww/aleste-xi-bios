@@ -568,6 +568,12 @@ static uint16_t bdos_c(void) {
     case 28: case 29: case 30: case 31: return 0;
     case 0xA0: return music_play(de);
     case 0xA1: music_info(de); return 0;
+    case 0xAA: {
+        uint8_t v[16];
+        mod_voices(v);
+        to_tpa(de, v, sizeof(v));
+        return 0;
+    }
     case 0xA2: case 0xA3: case 0xA4: case 0xA5: case 0xA6: case 0xA7: case 0xA9:
         return gfx_call(fn, de);
     default:
@@ -581,6 +587,8 @@ static uint16_t bdos_c(void) {
         disco, 3 no es un MOD de 4 canales ni un STM, 4 demasiado grande
    A1h  DE = 32 bytes en la TPA: [0] sonando, [1] posicion, [2] posiciones,
         [3] patrones, [4] fila, [5..8] "MOD"/"STM", [9..29] titulo (ASCIIZ)
+   AAh  DE = 16 bytes en la TPA: por canal, volumen (0-64), notas tocadas
+        (contador), instrumento y periodo / 16 (para los medidores de MAG.COM)
    El fichero se carga en la fisica 100000h (slot 0, fuera de todo lo demas)
    y suena desde la interrupcion del temporizador de la MS2, aunque se
    ejecuten otros programas. */

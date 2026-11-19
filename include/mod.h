@@ -26,5 +26,8 @@ uint8_t     mod_length(void);
 uint8_t     mod_row(void);
 uint8_t     mod_patterns(void);
 const char* mod_kind(void);              /* "MOD" o "STM" */
+/* 4 x 4 bytes, uno por canal: volumen (0-64), notas tocadas (contador que da
+   la vuelta), instrumento y periodo de Amiga / 16 */
+void        mod_voices(uint8_t* out);
 
 #endif

@@ -1,0 +1,39 @@
+; generado con mkpal.py
+pal:
+        dw 0000h, 0FFFh, 0000h, 0F80h, 0F43h, 0F9Ah, 0FC0h, 0C5Fh
+        dw 0BBCh, 06DFh, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0F44h, 0F64h, 0F84h, 0FA4h, 0FC4h, 0FE4h, 0EF4h, 0BF4h
+        dw 09F4h, 07F4h, 05F4h, 04F4h, 04F7h, 04F9h, 04FBh, 04FDh
+        dw 0558h, 088Bh, 0BCFh, 0FFFh, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 00F1h, 00F1h, 01F1h, 01F1h, 02F1h, 02F1h, 02F1h, 03F1h
+        dw 03F1h, 04F1h, 04F1h, 04F1h, 05F1h, 05F1h, 06F1h, 06F1h
+        dw 06F1h, 07F1h, 07F1h, 08F1h, 08F1h, 08F1h, 09F1h, 09F1h
+        dw 0AF1h, 0AF1h, 0AF1h, 0BF1h, 0BF1h, 0CF1h, 0CF1h, 0CF1h
+        dw 0DF1h, 0DF1h, 0DF1h, 0EF1h, 0EF1h, 0FF1h, 0FF1h, 0FE1h
+        dw 0FE1h, 0FD1h, 0FC1h, 0FC1h, 0FB1h, 0FB1h, 0FA1h, 0FA1h
+        dw 0F91h, 0F81h, 0F81h, 0F71h, 0F71h, 0F61h, 0F51h, 0F51h
+        dw 0F41h, 0F41h, 0F31h, 0F21h, 0F21h, 0F11h, 0F11h, 0F01h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+        dw 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h, 0000h
+grad:
+        dw 0F44h, 0F64h, 0F84h, 0FA4h, 0FC4h, 0FE4h, 0EF4h, 0BF4h
+        dw 09F4h, 07F4h, 05F4h, 04F4h, 04F7h, 04F9h, 04FBh, 04FDh
+        dw 04FFh, 04DFh, 04BFh, 049Fh, 047Fh, 044Fh, 054Fh, 074Fh
+        dw 094Fh, 0B4Fh, 0E4Fh, 0F4Eh, 0F4Ch, 0F4Ah, 0F48h, 0F46h

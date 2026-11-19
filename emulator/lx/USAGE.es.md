@@ -104,6 +104,7 @@ Programas de `LXDOS.DSK`:
 | `VIEW` | visor de imágenes: enseña todas las `.LXI` (una tecla, la siguiente; Esc sale); `VIEW B:*.LXI` |
 | `TUNNEL` | demo de 256 colores con la paleta girando (una tecla sale) |
 | `MODPLAY LXDEMO.MOD` | toca un MOD o un STM de fondo (`MODPLAY /S` lo para) |
+| `MAG LXDEMO` | toca un STM o un MOD con pantalla, homenaje a MAG, el reproductor de la Magic Sound del 520EX, en color y dibujado por la LX-GPU (una tecla lo para); con `mag-player.dsk` en B: `MAG B:AXELF` |
 | `HELLO`, `FILETEST`, `MSXTEST`, `GFX8TEST` | programas de prueba (consola, ficheros, funciones de MSX-DOS, modo de 8 bpp) |
 | `ZEXDOC`, `ZEXALL` | ejercitadores de instrucciones del Z80 (tardan un rato) |
 
