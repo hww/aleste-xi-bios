@@ -16,5 +16,13 @@ SECTION code_crt_start
     defs 0x0066 - $
     retn
 start:
+    ; el BSS no va en el fichero (Makefile): a cero
+    EXTERN __bss_compiler_head
+    EXTERN __BSS_END_tail
+    ld hl, __bss_compiler_head
+    ld de, __bss_compiler_head + 1
+    ld bc, __BSS_END_tail - __bss_compiler_head - 1
+    ld (hl), 0
+    ldir
     call _main
     halt

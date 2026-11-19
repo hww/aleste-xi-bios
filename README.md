@@ -250,7 +250,7 @@ The core takes `output/LX.ROM` from this repository. What each part does:
 | ROM monitor | `main.c` | HELP, CLS, TIME, BEEP, KEYB, PLAY, DIR, LOAD, MOD, STOP, DUMP, KEYS, DEMO, BOOT (LX-DOS), 520EX (the compatible mode) |
 | Booting a system | `bios/boot.asm` | Maps LXDOS.SYS (banks 20h-22h of slot 3) into windows 0-2 and jumps to it; window 3 keeps the drivers |
 | ABI | `output/bios_abi.asm` | The fixed addresses of the resident drivers; programs such as LX-DOS are linked against it, and its fingerprint is checked at boot |
-| LX-DOS | `dos/` | CP/M 2.2 and MSX-DOS 1 compatible DOS, with LX extensions for music and graphics; `bios/dosgate.asm` holds the gates between .COM programs and LX-DOS |
+| LX-DOS | `dos/` | CP/M 2.2 and MSX-DOS 1 compatible DOS, with LX extensions for music and graphics; `bios/dosgate.asm` holds the gates between .COM programs and LX-DOS. Its command line (`dos/edit.c`) edits the line (arrows, Home, End, Delete, Esc), keeps the last 8 commands (Up/Down) and completes commands and file names with Tab |
 | Tests | `dos/test/` | Programs with their prebuilt .COM files: files, MSX-DOS calls, graphics, the syscall protocol (`sys/SYSTEST`: `OUT (F2h),A`, exit on RET, interrupt hold) and ZEXALL/ZEXDOC |
 
 The supervisor/user mode and the syscall protocol (`OUT (F2h),A`, the exit on

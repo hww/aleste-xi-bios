@@ -18,8 +18,9 @@
 #include "console.h"
 #include "fat.h"
 #include "bdos.h"
+#include "edit.h"
 
-#define LXDOS_VERSION "0.4"
+#define LXDOS_VERSION "0.5"
 #define VRAM_PHYS   0xC40000UL
 #define VRAM_STRIDE 80
 
@@ -202,6 +203,8 @@ static void cmd_help(void) {
     con_puts("HELP               this help\n");
     con_puts("name [args]        run NAME.COM (CP/M 2.2 / MSX-DOS 1 programs)\n");
     con_puts("AUTOEXEC.BAT       runs its commands at boot\n");
+    con_puts("Keys: Left/Right/Home/End/Del edit the line, Esc clears it, Up/Down\n");
+    con_puts("recall the last 8 commands, Tab completes commands and file names.\n");
 }
 
 /* ---- KEYB [US|ES]: distribucion del teclado (la del OSD al arrancar) */
@@ -307,9 +310,9 @@ void main(void) {
 
     autoexec();
     while (1) {
-        con_putc('A' + drive);
-        con_puts("> ");
-        con_gets(line, sizeof(line));
+        char prompt[4];
+        prompt[0] = 'A' + drive; prompt[1] = '>'; prompt[2] = ' '; prompt[3] = 0;
+        le_gets(prompt, line, sizeof(line));
         run_line(line);
     }
 }

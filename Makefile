@@ -51,7 +51,7 @@ SOURCES  = src/console.c src/tune.c src/mod.c src/fat.c main.c
 DOS_SOURCES = dos/sections.asm dos/crt0_dos.asm $(ABI) \
 	src/drivers/int.c src/drivers/timer.c src/drivers/dma.c \
 	src/drivers/kbd.c src/drivers/snd.c src/drivers/fdc.c \
-	src/drivers/vbuf.c src/console.c src/fat.c src/mod.c dos/gfx8.c dos/bdos.c dos/main.c
+	src/drivers/vbuf.c src/console.c src/fat.c src/mod.c dos/gfx8.c dos/bdos.c dos/edit.c dos/main.c
 
 all: rom dos
 
@@ -99,7 +99,7 @@ $(ROM): $(SECTIONS) $(CRT) $(FONTS) $(DRIVERS) $(SOURCES)
 $(ABI) $(ABI_ID): $(ROM)
 
 # LX-DOS: built in its own folder (crt0_dos.asm includes abi_id.inc)
-$(DOS): $(ROM) $(DOS_SOURCES) dos/bdos.h dos/gfx8.h
+$(DOS): $(ROM) $(DOS_SOURCES) dos/bdos.h dos/gfx8.h dos/edit.h
 	rm -rf $(DOS_DIR)
 	mkdir -p $(DOS_DIR)
 	cp dos/*.c dos/*.h dos/*.asm $(ABI_ID) $(DOS_DIR)/
@@ -107,11 +107,16 @@ $(DOS): $(ROM) $(DOS_SOURCES) dos/bdos.h dos/gfx8.h
 	    sections.asm crt0_dos.asm ../bios_abi.asm \
 	    ../../src/drivers/int.c ../../src/drivers/timer.c ../../src/drivers/dma.c \
 	    ../../src/drivers/kbd.c ../../src/drivers/snd.c ../../src/drivers/fdc.c \
-	    ../../src/drivers/vbuf.c ../../src/console.c ../../src/fat.c ../../src/mod.c gfx8.c bdos.c main.c
+	    ../../src/drivers/vbuf.c ../../src/console.c ../../src/fat.c ../../src/mod.c gfx8.c bdos.c edit.c main.c
 	cat $(DOS_DIR)/lxdos_code_crt_start.bin > $@
 	head -c $$((0x100 - $$(wc -c < $(DOS_DIR)/lxdos_code_crt_start.bin))) /dev/zero >> $@
-	cat $(DOS_DIR)/lxdos_code_compiler.bin >> $@
-	@[ "$$(wc -c < $@)" -le 45056 ] || { echo "LXDOS.SYS is over 44 KB (the stack is at the top of window 2)"; exit 1; }
+	@# the file ends where the BSS starts: crt0_dos.asm clears the BSS
+	B=$$(sed -n 's/^__bss_compiler_head *= *\$$\([0-9A-Fa-f]*\).*/\1/p' $(DOS_DIR)/lxdos.map); \
+	  head -c $$((0x$$B - 0x100)) $(DOS_DIR)/lxdos_code_compiler.bin >> $@
+	@E=$$(sed -n 's/^__BSS_END_tail *= *\$$\([0-9A-Fa-f]*\).*/\1/p' $(DOS_DIR)/lxdos.map); \
+	  [ $$((0x$$E)) -le $$((0xBC00)) ] || { echo "LX-DOS ends at $$E: over BC00h (1 KB of stack below C000h)"; exit 1; }; \
+	  echo "LX-DOS: code and data to $$(printf %X $$(wc -c < $@))h, BSS to $$E""h"
+	@[ "$$(wc -c < $@)" -le 45056 ] || { echo "LXDOS.SYS is over 44 KB (the ROM loads up to 44 KB)"; exit 1; }
 	@echo "$@: $$(wc -c < $@) bytes"
 
 $(OUTPUT_DIR)/LX.ROM: $(ROM)

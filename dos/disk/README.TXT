@@ -1,5 +1,9 @@
 LX-DOS boot disk (Aleste LX).
 
+Command line: Left/Right/Home/End/Del edit the line, Esc clears it,
+Up/Down recall the last 8 commands, Tab completes commands and file
+names (twice: the list). HELP lists the commands.
+
 Tests of .COM programs:
   HELLO               hello world
   FILETEST            CP/M 2.2 files by FCB

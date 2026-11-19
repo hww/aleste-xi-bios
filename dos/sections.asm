@@ -14,10 +14,14 @@ SECTION code_l_sdcc
 SECTION code_math
 SECTION code_error
 SECTION code_user
+SECTION code_clib
+SECTION code_l_sccz80
 SECTION rodata_compiler
 SECTION rodata_user
 SECTION data_compiler
 SECTION data_user
 SECTION bss_compiler
 SECTION bss_user
+SECTION bss_clib
+SECTION bss_error
 SECTION BSS_END

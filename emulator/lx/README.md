@@ -170,7 +170,8 @@ Headless mode, for automated tests (the same checks as the core testbench):
              --shot screen.ppm --pcm audio.raw --save-a after.dsk boot.rom
 
 `--type MS:text` types the text at MS milliseconds of machine time (`|` is
-Enter, `~` Esc), `--mouse MS:dx,dy,buttons` moves the mouse,
+Enter, `~` Esc; `\t` Tab, `\b` Backspace, `\x` Delete, `\u` `\d` `\l` `\r` the
+arrows, `\h` Home, `\e` End, `\\` a backslash), `--mouse MS:dx,dy,buttons` moves the mouse,
 `--cmd MS:command` runs a debugger command then (with a
 breakpoint, the run stops there and prints the history), `--shot` saves the screen (PPM), `--pcm` the Magic Sound 2
 output (stereo, 16 bits, 48 kHz) and `--save-a` drive A's image at the end.

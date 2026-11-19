@@ -24,7 +24,9 @@
 //                      DeZog): arranca parado hasta que GDB siga
 //   Sin ventana (pruebas, como el banco de pruebas del core):
 //     --headless --ms N          corre N ms de la maquina y sale
-//     --type MS:texto            teclea texto a los MS ms ('|' Enter, '~' Esc)
+//     --type MS:texto            teclea texto a los MS ms ('|' Enter, '~' Esc;
+//                                \t Tab, \b retroceso, \x Supr, \u \d \l \r flechas,
+//                                \h Inicio, \e Fin, \\ barra)
 //     --shot fichero.ppm         pantalla al final
 //     --pcm fichero              audio (estereo, 16 bits, 48 kHz)
 //     --save-a fichero           imagen del disco A al final
@@ -158,8 +160,31 @@ static bool sdl_to_ps2(SDL_Scancode s, Ps2& o) {
     return false;
 }
 
+// ---- --type: \t Tab, \b retroceso, \x Supr, \u \d \l \r flechas, \h Inicio,
+// \e Fin, \\ barra (los codigos 1-7 los traduce ascii_to_ps2)
+static std::string type_escapes(const std::string& s) {
+    std::string o;
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] != '\\' || i + 1 >= s.size()) { o += s[i]; continue; }
+        switch (s[++i]) {
+        case 't': o += '\t'; break;   case 'b': o += '\b'; break;
+        case 'u': o += '\1'; break;   case 'd': o += '\2'; break;
+        case 'l': o += '\3'; break;   case 'r': o += '\4'; break;
+        case 'h': o += '\5'; break;   case 'e': o += '\6'; break;
+        case 'x': o += '\7'; break;   default:  o += s[i];
+        }
+    }
+    return o;
+}
+
 // ---- ASCII -> PS/2 con el teclado de EE. UU. (para --type)
-static bool ascii_to_ps2(char ch, uint8_t& code, bool& shift) {
+static bool ascii_to_ps2(char ch, uint8_t& code, bool& shift, bool& ext) {
+    // teclas especiales de --type (ver type_escapes): Tab, retroceso y las extendidas (E0)
+    static const struct { char c; uint8_t k; bool e; } special[] = {
+        {'\t',0x0D,0},{'\b',0x66,0},{1,0x75,1},{2,0x72,1},{3,0x6B,1},{4,0x74,1},{5,0x6C,1},{6,0x69,1},{7,0x71,1},
+    };
+    ext = false;
+    for (auto& o : special) if (o.c == ch) { code = o.k; shift = false; ext = o.e; return true; }
     static const char* lower = "abcdefghijklmnopqrstuvwxyz";
     static const uint8_t letters[] = {0x1C,0x32,0x21,0x23,0x24,0x2B,0x34,0x33,0x43,0x3B,0x42,0x4B,0x3A,
                                       0x31,0x44,0x4D,0x15,0x2D,0x1B,0x2C,0x3C,0x2A,0x1D,0x22,0x35,0x1A};
@@ -261,7 +286,7 @@ int main(int argc, char** argv) {
         else if (a == "--type") {
             std::string v = next();
             size_t c = v.find(':');
-            if (c != std::string::npos) jobs.push_back({atof(v.substr(0, c).c_str()), v.substr(c + 1)});
+            if (c != std::string::npos) jobs.push_back({atof(v.substr(0, c).c_str()), type_escapes(v.substr(c + 1))});
         }
         else if (a == "--mouse") {
             MouseJob j{};
@@ -319,10 +344,10 @@ int main(int argc, char** argv) {
     auto do_typing = [&](double now_ms) {
         for (auto& j : jobs) {
             if (now_ms < j.ms || j.pos >= j.text.size() || now_ms < j.next) continue;
-            uint8_t code; bool sh;
-            if (!ascii_to_ps2(j.text[j.pos], code, sh)) { j.pos++; continue; }
-            if (j.phase == 0) { if (sh) m.key_event(0x12, true, false); m.key_event(code, true, false); j.phase = 1; }
-            else { m.key_event(code, false, false); if (sh) m.key_event(0x12, false, false); j.phase = 0; j.pos++; }
+            uint8_t code; bool sh, ext;
+            if (!ascii_to_ps2(j.text[j.pos], code, sh, ext)) { j.pos++; continue; }
+            if (j.phase == 0) { if (sh) m.key_event(0x12, true, false); m.key_event(code, true, ext); j.phase = 1; }
+            else { m.key_event(code, false, ext); if (sh) m.key_event(0x12, false, false); j.phase = 0; j.pos++; }
             j.next = now_ms + (m.legacy() ? 40 : 6);    // el CPC explora la matriz cada 20 ms
         }
     };
