@@ -1,5 +1,5 @@
 ; mag.asm - MAG.COM: reproductor de musica con pantalla, homenaje al MAG de
-; la Magic Sound del Aleste 520EX (Patisonic, 1993), con color y la LX-GPU.
+; la Magic Sound del Aleste 520EX (escrito por hww), con color y la LX-GPU.
 ; Shaeon (Carlos Palmero), para el core AlesteLX_MiSTer y el emulador alestelx.
 ;
 ;   MAG fichero     toca un STM o un MOD (sin extension: .STM y luego .MOD)
@@ -669,7 +669,7 @@ texts:  db 24, 1, "MAGIC  SOUND  TRACKER", 0
         db 84, 9, "8/16-bit samples, 8-bit volume", 0
         db 96, 3, "PROTRACKER & SCREAM TRACKER COMPATIBLE", 0
         db 104, 4, "graphics drawn by the LX-GPU", 0
-        db 116, 6, "MAG (C) 1993 Patisonic - LX 2026 Shaeon", 0
+        db 116, 6, "(C) 2026 Shaeon. Original: hww, H2W Lab", 0
         db 0FFh
 
 m_usage: db "MAG: plays a Scream Tracker (STM) or ProTracker (MOD) song", 13, 10
