@@ -10,7 +10,7 @@
  *   P7  tamano / fase de la escena
  *   P8  pagina de los objetos (200000h)      P9 pagina de los graficos
  *   P10 pagina de los datos del Z80 (la del programa)
- *   P11/P12 primer pixel de la fuente 8x8 en 1 bpp (en P10)
+ *   P11 pagina de la fuente 8x8 (1 bpp, desde el pixel 0)   P12 libre
  *   P13-P15 libres para cada escena
  */
 #ifndef DEMO_H
@@ -19,7 +19,8 @@
 #include <stdint.h>
 
 #define OBJ_PAGE   0x20
-#define ASSET_PAGE 0x21
+#define ASSET_PAGE 0x21            /* 21h-25h graficos */
+#define FONT_PAGE  0x26
 #define NSCENES    10
 
 typedef struct {
@@ -55,6 +56,9 @@ uint16_t step_frames(uint8_t kind);
 uint16_t find_limit(const char* tag, uint16_t n0, uint16_t nmax, uint16_t* pow2, meas_t* best);
 void     add_row(const char* scene, const char* result, const meas_t* m);
 void     show_result(const char* s);
+uint8_t  gpu_run_scene(void);
+void     gpu_copy(uint8_t src_page, uint16_t src_w, uint8_t dst_page, uint16_t dst_w, uint16_t words);
+void     pal_restore(void);
 
 /* scenes.c */
 void     scene_run(uint8_t n);

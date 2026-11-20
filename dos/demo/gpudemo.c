@@ -27,6 +27,7 @@
 #include "demo.h"
 #include "pk_clear.h"
 #include "pk_overlay.h"
+#include "pk_copy.h"
 
 #define BUF0 0xC5
 #define BUF1 0xC6
@@ -91,12 +92,31 @@ void load_scene(const uint16_t* pk, uint16_t n) {
     load_pk(pk_scene, pk, n, P);
 }
 
+/* copia palabras de 16 bits entre paginas (deja P1-P3, P13, P14 cambiados) */
+void gpu_copy(uint8_t src_page, uint16_t src_w, uint8_t dst_page, uint16_t dst_w, uint16_t words) {
+    load_pk(pk_misc, pk_copy, sizeof(pk_copy) / 2, P);
+    P[13] = src_page;
+    P[14] = src_w;
+    P[3] = dst_page;
+    P[1] = dst_w;
+    P[2] = words;
+    P[6] = 0;
+    gpu_start(pk_misc_phys);
+    gpu_wait();
+}
+
+uint8_t gpu_run_scene(void) {
+    gpu_start(pk_scene_phys);
+    return gpu_wait();
+}
+
 static uint8_t run(uint32_t pk) {
     gpu_start(pk);
     return gpu_wait();
 }
 
 /* ------------------------------------------------------------------ video */
+void pal_restore(void);
 static void pal_init(void) {
     static const uint16_t base[16] = {
         0x000, 0x00A, 0x0A0, 0x0AA, 0xA00, 0xA0A, 0xA50, 0xAAA,
@@ -114,6 +134,8 @@ static void pal_init(void) {
         pal_set((uint8_t)i, (uint16_t)((r << 8) | (g << 4) | b));
     }
 }
+
+void pal_restore(void) { pal_init(); }
 
 void clear_buf(uint8_t page, uint16_t word) {
     P[0] = (uint16_t)(vm.gmode << 8) | page;
@@ -191,6 +213,7 @@ static void ov_draw(uint16_t y, uint8_t fg, uint8_t bg) {
 
 void set_status(const char* s) {
     strncpy(status_name, s, sizeof(status_name) - 1);
+    if (!strchr(ov_text, '|')) strcpy(ov_text, status_name);   /* aun sin medidas */
 }
 
 static void meas_text(const meas_t* m) {
@@ -228,7 +251,10 @@ void run_frames(uint16_t frames, meas_t* m) {
         last_flip = tf;
     }
     P[6] = init & ~1;
-    if (!n) n = 1;
+    if (!n) {                       /* un solo cuadro (preparar): sin medida */
+        memset(m, 0, sizeof(*m));
+        return;
+    }
     if (!shown) shown = 1;
     m->frames = n;
     m->render = render / n;
@@ -361,17 +387,17 @@ int main(int argc, char** argv) {
     pk_scene = p; p += 1000;
     pk_ov = p; p += 160;
     pk_misc = p; p += 80;
+    pk_misc_phys = phys(pk_misc);
     pk_scene_phys = phys(pk_scene);
     pk_ov_phys = phys(pk_ov);
     pk_misc_phys = phys(pk_misc);
     memset(P, 0, 64);
     memset(PO, 0, 64);
-    memcpy(font, (void*)0xE000, 768);           /* C0E000h: ventana 3, banco 3 */
-    {
-        uint32_t fp = (phys(font) & 0xFFFF) * 8;
-        P[11] = PO[11] = (uint16_t)fp;
-        P[12] = PO[12] = (uint16_t)(fp >> 16);
-    }
+    /* la fuente de la BIOS (C0E000h: ventana 3, banco 3), al principio de su
+       pagina: en 1 bpp un canal solo llega a los primeros 32 KB */
+    memcpy(font, (void*)0xE000, 768);
+    gpu_copy((uint8_t)(phys(font) >> 16), (uint16_t)(phys(font) & 0xFFFF) >> 1, FONT_PAGE, 0, 384);
+    P[11] = PO[11] = FONT_PAGE;
     P[8] = OBJ_PAGE;
     P[9] = ASSET_PAGE;
     P[10] = PO[10] = (uint16_t)(phys(pool) >> 16);

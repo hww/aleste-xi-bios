@@ -18,8 +18,8 @@
         MOV     R24, DATA3      ; P8 pagina de los objetos
         MOV     R25, DATA3      ; P9 pagina de los graficos
         MOV     R26, DATA3      ; P10 pagina de los datos del Z80
-        MOV     R27, DATA3      ; P11 fuente (bajo)
-        MOV     R28, DATA3      ; P12 fuente (alto)
+        MOV     R27, DATA3      ; P11 pagina de la fuente
+        MOV     R28, DATA3      ; P12
         MOV     R29, DATA3      ; P13
         MOV     R30, DATA3      ; P14
         MOV     R31, DATA3      ; P15

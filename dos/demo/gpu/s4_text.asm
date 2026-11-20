@@ -20,8 +20,8 @@
         JMP.NE  b4
         MOV     R13, R29
         AND     R13, #0xFF
-b4:     LDI     R0, #0x0400     ; CH1: la fuente, 1 bpp
-        OR      R0, R26
+b4:     LDI     R0, #0x0400     ; CH1: la fuente, 1 bpp (pagina P11)
+        OR      R0, R27
         MOV     PAGE1, R0
         MOV     STEP1, #1
         MOV     PAGE3, R26      ; CH3: tabla de colores
@@ -45,12 +45,8 @@ c1:     MOV     R7, R12
         MOV     IDX3, R0
         MOV     R4, DATA3
         MOV     R8, ZERO        ; fila
-grow:   MOV     R0, R27         ; fuente: primer pixel + glifo + fila
-        MOV     R3, R28
-        ADD     R0, R7
-        ADC     R3, ZERO
-        MOV     IDXH1, R3
-        MOV     IDX1, R0
+grow:   MOV     IDXH1, #0       ; fuente: glifo + fila
+        MOV     IDX1, R7
         MOV     R1, R5
         MOV     R2, R6
         ADD     R2, R8
