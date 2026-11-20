@@ -3,6 +3,8 @@
  * Guion: hww (H2W Lab), "GPU Demo and Benchmark Scenario".
  *
  *   GPUDEMO [--m 8|4] [--s 64|32] [--b N] [--t N] [--bench] [--only N]
+ *           [--frames F] [--n N]   (para medir en la simulacion: F cuadros por
+ *                                   paso, N objetos fijos sin buscar el maximo)
  *
  * El Z80 solo organiza: pone los parametros de cada cuadro, lanza el
  * microprograma de la escena y el de la linea de estado, y mide con el
@@ -47,7 +49,8 @@ static uint32_t  pk_scene_phys, pk_ov_phys, pk_misc_phys;
 
 /* ---- opciones */
 uint8_t opt_b = 1, opt_bench, opt_t;
-static uint8_t opt_m, opt_s, opt_only;
+static uint8_t opt_m, opt_s, opt_only, opt_frames;
+static uint16_t opt_n;
 
 /* ---- video */
 vmode_t  vm;
@@ -266,12 +269,17 @@ void run_frames(uint16_t frames, meas_t* m) {
     meas_text(m);
 }
 
+/* cabe si el cuadro medio deja un 5% de margen y se mantienen los FPS del
+   presupuesto (60 / b en la MiSTer) */
 uint8_t fits(const meas_t* m) {
-    return m->render <= (uint32_t)opt_b * t_frame;
+    uint32_t budget = (uint32_t)opt_b * t_frame;
+    uint32_t fps10 = 100000000UL / budget;              /* FPS x 10 x 10 */
+    return m->render <= budget - budget / 20 && (uint32_t)m->fps10 * 10 >= fps10 - fps10 / 30;
 }
 
 uint16_t step_frames(uint8_t kind) {        /* 0 paso, 1 afinado, 2 escena fija */
     uint32_t us;
+    if (opt_frames) return opt_frames;
     if (opt_bench) return kind == 1 ? 30 : 60;
     if (kind == 2) us = opt_t ? (uint32_t)opt_t * 1000000UL : 3000000UL;
     else us = opt_t ? (uint32_t)opt_t * 1000000UL : 1200000UL;
@@ -286,6 +294,15 @@ uint16_t find_limit(const char* tag, uint16_t n0, uint16_t nmax, uint16_t* pow2,
     uint16_t n = n0, last = 0, lo, hi;
     char s[24];
     best->render = 0;
+    if (opt_n) {                                /* --n: un solo paso, sin buscar */
+        P[4] = opt_n;
+        P[6] |= 1;
+        sprintf(s, "%s N%u", tag, opt_n);
+        set_status(s);
+        run_frames(step_frames(0), best);
+        *pow2 = opt_n;
+        return opt_n;
+    }
     while (n <= nmax) {
         P[4] = n;
         P[6] |= 1;
@@ -366,6 +383,8 @@ static void parse(int argc, char** argv) {
         else if (!strcmp(o, "--T")) { opt_t = (uint8_t)atoi(v); i++; }
         else if (!strcmp(o, "--ONLY")) { opt_only = (uint8_t)atoi(v); i++; }
         else if (!strcmp(o, "--BENCH")) opt_bench = 1;
+        else if (!strcmp(o, "--FRAMES")) { opt_frames = (uint8_t)atoi(v); i++; }
+        else if (!strcmp(o, "--N")) { opt_n = (uint16_t)atoi(v); i++; }
     }
     if (!opt_b) opt_b = 1;
     if (opt_m != 4 && opt_m != 8) opt_m = 0;

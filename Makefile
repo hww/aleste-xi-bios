@@ -4,6 +4,8 @@
 #   make rom        only the ROM and its ABI (output/bios_abi.asm)
 #   make dos        LX-DOS (needs the ROM's ABI)
 #   make disk       the LX-DOS boot floppy (output/LXDOS.DSK, needs python3)
+#   make demo       GPUDEMO.COM (dos/demo: the LX-GPU demo and benchmark; needs
+#                   the LX-GPU assembler, deps/lx-gpu-rtl/build/asm)
 #   make clean
 #
 # z88dk: set Z88DK_PATH here or on the command line (make Z88DK_PATH=...), or
@@ -59,6 +61,14 @@ rom: $(OUTPUT_DIR)/LX.ROM
 dos: $(OUTPUT_DIR)/LXDOS.SYS
 disk: $(OUTPUT_DIR)/LXDOS.DSK
 
+# GPUDEMO: the GPU microprograms become C headers (pk_*.h), then a CP/M program
+DEMO_SRC = $(wildcard dos/demo/*.c dos/demo/*.h dos/demo/gpu/*.asm dos/demo/gpu/*.inc)
+demo: dos/demo/GPUDEMO.COM
+dos/demo/GPUDEMO.COM: $(DEMO_SRC)
+	sh dos/demo/build.sh
+	cd dos/demo && $(CC) +cpm -compiler=sdcc -SO3 gpudemo.c scenes.c hw.c -o GPUDEMO.COM -create-app
+	rm -f dos/demo/*.def
+
 # MAG songs (from MAG of the 520EX Magic Sound, hww/Aleste520EX Soft/Disks):
 # three fit on the boot disk; all five on MAGSONGS.DSK (for drive B:)
 MAG_SONGS_A = dos/test/mag/songs/AXELF.STM dos/test/mag/songs/SLL1.STM dos/test/mag/songs/HEADACHE.STM
@@ -72,7 +82,7 @@ $(OUTPUT_DIR)/MAGSONGS.DSK: $(MAG_SONGS) dos/test/mag/MAG.COM tools/make_msxdisk
 
 # LX-DOS boot floppy: LXDOS.SYS, the test programs, the images and the test MOD
 DISK_FILES = dos/disk/README.TXT dos/test/*.COM dos/test/LXDEMO.MOD \
-	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/gpu/*.COM dos/test/mag/*.COM dos/test/zex/*.COM \
+	dos/test/gfx/*.COM dos/test/gfx/img/*.LXI dos/test/sys/*.COM dos/test/gpu/*.COM dos/test/mag/*.COM dos/demo/GPUDEMO.COM dos/test/zex/*.COM \
 	$(MAG_SONGS_A)
 $(OUTPUT_DIR)/LXDOS.DSK: $(DOS) $(wildcard $(DISK_FILES)) tools/make_msxdisk.py
 	rm -rf $(BUILD_DIR)/disk
@@ -151,4 +161,4 @@ debug_vbuf:
 clean:
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR)
 
-.PHONY: all rom dos disk songs clean preprocess debug_vbuf
+.PHONY: all rom dos disk songs demo clean preprocess debug_vbuf
