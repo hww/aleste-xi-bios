@@ -104,4 +104,4 @@ read (`MOV.EQ ZERO, DATA0`), which only advances its index.
 
 - **IDXH and IDX.** Write IDXH before IDX: writing IDX uses IDXH and clears it.
 - **1 bpp channels.** The channel index is a signed 19-bit number, so in 1 bpp a channel only reaches the first 32 KB of its page. That is why the font is copied to the start of page 26h.
-- **Page changes.** Writing to PAGE the page the channel already has does not cancel a pending page change (A → B → A with no access in between leaves B). Avoid it.
+- **Page changes.** Before lx-gpu-rtl c5d4911, writing to PAGE the page the channel already had did not cancel a pending page change (A → B → A with no access in between left B). It is fixed there; the demo avoids the pattern anyway.
