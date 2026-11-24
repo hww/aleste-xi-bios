@@ -18,9 +18,13 @@
 
 #include <stdint.h>
 
-#define OBJ_PAGE   0x20
-#define ASSET_PAGE 0x21            /* 21h-25h graficos */
-#define FONT_PAGE  0x26
+/* Paginas de trabajo. Con el controlador de SDRAM con filas abiertas, el banco
+ * son los dos bits bajos de la pagina, y los buferes de pantalla C5/C6 estan en
+ * los bancos 1 y 2. Los graficos y la fuente van en los bancos 0 y 3, para que
+ * leerlos no cierre la fila de la pantalla en la que se dibuja. */
+#define OBJ_PAGE   0x20            /* banco 0 */
+#define ASSET_PAGE 0x28            /* 28h-2Bh bolas (S5), 28h tiles, 2Ch sprite de S8/S9 */
+#define FONT_PAGE  0x27            /* banco 3 */
 #define NSCENES    10
 
 typedef struct {
