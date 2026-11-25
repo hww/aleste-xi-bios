@@ -333,6 +333,7 @@ static void scene10(void) {
     char tag[12], s[48], a[10];
     if (!img_ok) {
         set_status("S10 LOADING");
+        show_message("S10: LOADING IMAGE...");
         for (i = 0; i < 3 && !img_ok; i++) img_ok = load_image(names[i]);
         if (!img_ok) { add_row("S10 SHIFT", "no .LXI image", &m); return; }
     }

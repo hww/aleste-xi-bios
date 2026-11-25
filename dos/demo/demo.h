@@ -52,6 +52,7 @@ void     u32dec(char* s, uint32_t v, uint8_t frac);
 void     load_scene(const uint16_t* pk, uint16_t n);
 void     clear_buf(uint8_t page, uint16_t word);
 void     clear_both(uint16_t word);
+void     show_message(const char* s);
 uint8_t  back_page(void);
 void     set_status(const char* s);
 void     run_frames(uint16_t frames, meas_t* m);

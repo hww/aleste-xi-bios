@@ -346,6 +346,18 @@ void add_row(const char* scene, const char* result, const meas_t* m) {
     r->ms10 = (uint16_t)(m->render / 100);
 }
 
+/* pantalla limpia con un mensaje en el centro, para las esperas largas (cargar
+   las imagenes de S10 desde el disco): sin esto se quedaba congelado el ultimo
+   cuadro de la escena anterior y parecia un fallo */
+void show_message(const char* s) {
+    uint16_t p0 = P[0], p13 = P[13], p14 = P[14];
+    clear_both(0);
+    strncpy(ov_text, s, 60);
+    ov_draw(vm.height / 2 - 4, 15, 0);
+    flip();
+    P[0] = p0; P[13] = p13; P[14] = p14;
+}
+
 /* el resultado de una escena, en el centro (solo en la demo) */
 void show_result(const char* s) {
     uint16_t f, frames;
