@@ -53,7 +53,7 @@ starts the scene's microprogram and then the one for the status line, and
 waits for VBlank. The GPU itself creates and moves everything: the objects, the
 sprites and the tiles. So the Z80's share stays close to 0.
 
-**Measuring.** The 1 MHz timer (F4h–F7h) measures each frame:
+**Measuring.** The 1 MHz system timer (RT, F4h/F5h, 16 bits, extended to 32 bits in software; the wait loops keep it up to date) measures each frame:
 
 | Figure | What it covers |
 |---|---|

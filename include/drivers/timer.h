@@ -3,8 +3,11 @@
  * @brief Temporizador del sistema (driver polimorfico, modo LX)
  * Shaeon (Carlos Palmero), para el modo LX del core aleste520ex.
  *
- * timer_get_ms y timer_delay_ms no necesitan interrupciones. El periodico
- * usa el driver de interrupciones (int_install antes).
+ * Temporizador rev 6 (puertos F4..F6, linea 6 del PIC): RT de 16 bits a
+ * 1 MHz y un comparador. Los milisegundos se cuentan en software; el driver
+ * rearma el comparador cada 30 ms como mucho para no perder vueltas de RT,
+ * asi que int_install va antes que timer_install. Sin interrupciones,
+ * timer_get_ms sigue bien si se llama al menos cada 65 ms.
  */
 #ifndef __TIMER_H__
 #define __TIMER_H__

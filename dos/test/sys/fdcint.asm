@@ -5,7 +5,8 @@
 ; INTERRUPT STATUS), en la fase de ejecucion y en la de resultado. Con las
 ; interrupciones desactivadas (la linea 0 enmascarada no llega a la CPU, pero
 ; el PIC anota el flanco igual), se borra la marca de la linea 0, se hace
-; cada paso y se mira si el PIC la ha vuelto a ver (PEND_LO, bit 0):
+; cada paso y se mira si el PIC la ha vuelto a ver (PIC v2: PENDING_L, bit 0;
+; se borra con COMMAND CLEAR_PENDING):
 ;   idle    en reposo                                   0
 ;   seek    tras RECALIBRATE                            1
 ;   (sense) SENSE INTERRUPT STATUS y despues            0
@@ -17,8 +18,8 @@
 ; pasmo fdcint.asm FDCINT.COM
 BDOS     equ 5
 PAGE     equ 0F1h              ; pagina MMIO
-PIC_PEND equ 05h               ; pagina 0
-PIC_CLR  equ 07h
+PIC_CMD  equ 00h               ; pagina 0: COMMAND
+PIC_PEND equ 03h               ; PENDING_L
 FDC      equ 9                 ; pagina 9
 FDC_MSR  equ 00h
 FDC_DATA equ 01h
@@ -121,8 +122,8 @@ pr:     ld c, 9
 ; ---- PIC (pagina 0)
 clear:  xor a                  ; borra la marca de la linea 0
         out (PAGE), a
-        ld a, 1
-        out (PIC_CLR), a
+        ld a, 40h              ; CLEAR_PENDING, linea 0
+        out (PIC_CMD), a
         ld a, FDC
         out (PAGE), a
         ret

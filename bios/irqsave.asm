@@ -17,7 +17,10 @@ PUBLIC __irq_off, __irq_on
 
 __irq_off:
     push af
+    ld a, i                     ; dos veces: LD A,I da P/V = 0 si se acepta
+    jp pe, was_on1              ; una INT mientras se ejecuta (Z80 NMOS)
     ld a, i
+was_on1:
     di
     ld a, 0
     jp po, was_off

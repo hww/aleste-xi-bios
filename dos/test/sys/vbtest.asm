@@ -1,6 +1,6 @@
 ; vbtest.asm - VBTEST.COM: el VBlank (linea 2 del PIC) activo con un programa
 ; del LX-DOS en marcha, sin modo usuario. Escribe un punto cada ~0,1 s durante
-; ~1 s y deja la mascara del PIC como estaba.
+; ~1 s y deja la linea como estaba (PIC v2: ENABLE_L 09h, COMMAND 00h).
 ; Shaeon (Carlos Palmero), para el core AlesteLX_MiSTer y el emulador alestelx.
 ; pasmo vbtest.asm VBTEST.COM
 BDOS    equ 5
@@ -13,9 +13,9 @@ BDOS    equ 5
         ld (sv_page), a
         xor a
         out (0F1h), a
-        in a, (00h)
+        in a, (09h)             ; ENABLE_L
         ld (sv_mask), a
-        or 04h
+        ld a, 22h               ; ENABLE, linea 2
         out (00h), a
         ld a, (sv_page)
         out (0F1h), a
@@ -39,7 +39,11 @@ w2:     dec bc
         xor a
         out (0F1h), a
         ld a, (sv_mask)
+        and 04h
+        jr nz, keep             ; ya estaba habilitada
+        ld a, 32h               ; DISABLE, linea 2
         out (00h), a
+keep:
         ld a, (sv_page)
         out (0F1h), a
         ei

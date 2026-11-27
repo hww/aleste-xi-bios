@@ -111,10 +111,7 @@ loaded: or a
         call BDOS
         ld de, t_pos
         call text
-        ld c, 0F4h              ; empieza el ritmo
-        in l, (c)
-        inc c
-        in h, (c)
+        call rdrt               ; empieza el ritmo
         ld (last), hl
 
         ; ---- 50 cuadros por segundo hasta que se pulse una tecla
@@ -214,15 +211,28 @@ ct2:    push hl
         pop hl
         jr ctexts
 
+; ---- HL = RT (F4h/F5h, 16 bits a 1 MHz). El par va con las interrupciones
+;      cerradas: la rutina del temporizador de la ROM lee la misma instantanea.
+rdrt:   ld a, i             ; dos veces: LD A,I da P/V = 0 si entra una INT
+        jp pe, rdrt_on
+        ld a, i
+rdrt_on: di
+        push af
+        ld c, 0F4h
+        in l, (c)
+        inc c
+        in h, (c)
+        pop af
+        ret po
+        ei
+        ret
+
 cls:    ld de, f_all
         ld c, 0A5h
         jp BDOS
 
 ; ---- ritmo: espera a que pasen 20 ms desde el cuadro anterior
-wait20: ld c, 0F4h
-        in l, (c)
-        inc c
-        in h, (c)
+wait20: call rdrt
         ld de, (last)
         or a
         sbc hl, de              ; HL = us desde el ultimo cuadro
@@ -239,10 +249,7 @@ wait20: ld c, 0F4h
         add hl, de
         ld (last), hl
         jr w20cnt
-w20late: ld c, 0F4h
-        in l, (c)
-        inc c
-        in h, (c)
+w20late: call rdrt
         ld (last), hl
 w20cnt: ld a, (ticks)           ; 50 cuadros, un segundo
         inc a

@@ -296,6 +296,7 @@ void main(void) {
     /* los drivers siguen instalados; se reinstalan los que tenian rutinas de
        la ROM (interrupciones) y los que dependen de ellas */
     int_install();
+    timer_install();                /* la linea 6 y su rutina, para el reloj */
     kbd_install();
     snd_install();
     dma_install();

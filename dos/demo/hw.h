@@ -12,7 +12,8 @@
 
 uint8_t  port_in(uint8_t port) __z88dk_fastcall;
 
-/* temporizador libre de 1 MHz (F4h-F7h), 32 bits con una sola copia */
+/* us desde el arranque: RT (F4h/F5h, 16 bits a 1 MHz) alargado a 32 bits;
+   llamarla al menos cada 65 ms (las esperas de hw.c ya lo hacen) */
 uint32_t timer_us(void);
 
 /* direccion fisica (24 bits) de una direccion del programa */

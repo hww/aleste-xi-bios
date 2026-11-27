@@ -83,9 +83,7 @@ MMIO_PIC_SIZE      equ 32
 MMIO_IPC_BASE      equ 0xFF0020
 MMIO_IPC_SIZE      equ 32
 
-; System Timer
-MMIO_TIMER_BASE    equ 0xFF0040
-MMIO_TIMER_SIZE    equ 32
+; (FF0040-FF005F: libre; el temporizador rev 6 esta en los puertos F4..F6)
 
 ; RTC Controller
 MMIO_RTC_BASE      equ 0xFF0060

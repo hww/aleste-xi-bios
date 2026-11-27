@@ -1,24 +1,28 @@
 ; =============================================================================
-; INT_LX.ASM - Interrupciones con el PIC del modo LX (pagina MMIO 0, FF0000)
-; Shaeon (Carlos Palmero). Registros: doc/10-modo-lx.md del core.
+; INT_LX.ASM - Interrupciones con el PIC v2 del modo LX (pagina MMIO 0, FF0000)
+; Shaeon (Carlos Palmero). Registros: aleste-xi-doc, 12-pic-v2.
 ;
-; Despachador de IM 1: guarda registros y pagina MMIO, lee las lineas
-; pendientes y habilitadas, las borra en el PIC y llama a la rutina de cada
-; una (de la 0 a la 15). Lineas: 0 disquetera, 1 DMA, 2 VBlank, 3 Magic
-; Sound 2, 4 Gate Array (300 Hz), 6 temporizador.
+; Despachador de IM 1: guarda registros y pagina MMIO y atiende las lineas
+; con CLAIM -> rutina -> COMPLETE hasta que CLAIM no devuelve ninguna. El
+; PIC elige la de mas prioridad (a igual prioridad, la de numero menor).
+; Lineas: 0 disquetera, 1 DMA, 2 VBlank, 3 Magic Sound 2, 4 Gate Array
+; (300 Hz), 6 temporizador.
 ; =============================================================================
 
 module int_lx
 
 defc PORT_MMIO_PAGE = 0xF1
 defc PIC_PAGE       = 0
-defc PIC_MASK_LO    = 0x00
-defc PIC_MASK_HI    = 0x01
+defc PIC_COMMAND    = 0x00
+defc PIC_CLAIM      = 0x01
 defc PIC_VECTOR     = 0x02
-defc PIC_STATUS_LO  = 0x03
-defc PIC_STATUS_HI  = 0x04
-defc PIC_CLEAR_LO   = 0x07
-defc PIC_CLEAR_HI   = 0x08
+defc PIC_ENABLE_LO  = 0x09
+
+; ordenes (bits 6..4) | linea (bits 3..0)
+defc CMD_COMPLETE   = 0x10
+defc CMD_ENABLE     = 0x20
+defc CMD_DISABLE    = 0x30
+defc CMD_CLEAR_BOTH = 0x60
 
 SECTION DRV_CODE
 
@@ -53,7 +57,8 @@ int_lx_detect:
     xor a
     ret
 
-; ---- install: todo enmascarado y borrado, sin rutinas, IM 1 y EI
+; ---- install: todas las lineas deshabilitadas, borradas y fuera de
+;      servicio, prioridad 0, sin rutinas; IM 1 y EI
 int_lx_install:
     di
     ld hl, handlers
@@ -62,17 +67,25 @@ int_clr:
     ld (hl), 0
     inc hl
     djnz int_clr
-    xor a
-    ld (mask_lo), a
-    ld (mask_hi), a
     ld a, PIC_PAGE
     out (PORT_MMIO_PAGE), a
-    xor a
-    out (PIC_MASK_LO), a
-    out (PIC_MASK_HI), a
-    ld a, 0xFF
-    out (PIC_CLEAR_LO), a
-    out (PIC_CLEAR_HI), a
+    ld b, 0
+int_ini:
+    ld a, CMD_DISABLE
+    or b
+    out (PIC_COMMAND), a
+    and 0x0F
+    or CMD_CLEAR_BOTH
+    out (PIC_COMMAND), a
+    and 0x0F
+    or CMD_COMPLETE
+    out (PIC_COMMAND), a
+    and 0x0F
+    or 0x80                     ; prioridad 0
+    out (PIC_COMMAND), a
+    inc b
+    bit 4, b
+    jr z, int_ini
     im 1
     ei
     xor a
@@ -82,11 +95,14 @@ int_lx_uninstall:
     di
     ld a, PIC_PAGE
     out (PORT_MMIO_PAGE), a
-    xor a
-    out (PIC_MASK_LO), a
-    out (PIC_MASK_HI), a
-    ld (mask_lo), a
-    ld (mask_hi), a
+    ld b, 0
+int_un:
+    ld a, CMD_DISABLE
+    or b
+    out (PIC_COMMAND), a
+    inc b
+    bit 4, b
+    jr z, int_un
     ret
 
 int_lx_get_info:
@@ -114,48 +130,27 @@ int_lx_set_handler:
     ei
     ret
 
-; ---- enable / disable: A = linea. Actualiza la copia y el PIC.
+; ---- enable / disable: A = linea. El PIC guarda el estado (ENABLE_L/H).
 int_lx_enable:
-    call line_bit               ; HL = &mask_lo o &mask_hi, C = bit, E = puerto
-    di
-    ld a, (hl)
-    or c
-    jr mask_out
+    and 0x0F
+    or CMD_ENABLE
+    jr cmd_out
 int_lx_disable:
-    call line_bit
+    and 0x0F
+    or CMD_DISABLE
+cmd_out:
+    ld c, a
     di
-    ld a, c
-    cpl
-    and (hl)
-mask_out:
-    ld (hl), a
+    in a, (PORT_MMIO_PAGE)
     ld b, a
     ld a, PIC_PAGE
     out (PORT_MMIO_PAGE), a
-    ld c, e
-    out (c), b
+    ld a, c
+    out (PIC_COMMAND), a
+    ld a, b
+    out (PORT_MMIO_PAGE), a
     ei
     ret
-
-; A = linea -> HL = &mask_lo o &mask_hi, C = mascara del bit, E = puerto (0/1)
-line_bit:
-    and 0x0F
-    ld hl, mask_lo
-    ld e, PIC_MASK_LO
-    cp 8
-    jr c, lb_lo
-    inc hl
-    ld e, PIC_MASK_HI
-    sub 8
-lb_lo:
-    ld b, a
-    ld c, 1
-    inc b
-lb_sh:
-    dec b
-    ret z
-    sla c
-    jr lb_sh
 
 ; ---- IM 1: despacha y vuelve
 int_lx_isr:
@@ -175,44 +170,33 @@ __int_lx_dispatch:
     push iy
     in a, (PORT_MMIO_PAGE)      ; pagina del programa interrumpido
     push af
-    ld a, PIC_PAGE
-    out (PORT_MMIO_PAGE), a
-    in a, (PIC_STATUS_LO)
-    ld e, a
-    in a, (PIC_STATUS_HI)
-    ld d, a
-    ld a, e                     ; las borra antes de atenderlas: si llega otra
-    out (PIC_CLEAR_LO), a       ; durante la rutina, se vuelve a capturar
-    ld a, d
-    out (PIC_CLEAR_HI), a
-    ld hl, handlers
-    ld b, 0                     ; B = linea
 isr_next:
-    ld a, d
-    or e
-    jr z, isr_done
-    srl d
-    rr e
-    jr nc, isr_skip
-    push hl
-    push de
-    push bc
+    ld a, PIC_PAGE              ; la rutina puede haber cambiado la pagina
+    out (PORT_MMIO_PAGE), a
+    in a, (PIC_CLAIM)           ; bit 7 VALID, bits 3..0 linea
+    or a
+    jp p, isr_done
+    and 0x0F
+    ld b, a
+    add a, a
+    ld e, a
+    ld d, 0
+    ld hl, handlers
+    add hl, de
     ld a, (hl)
     inc hl
     ld h, (hl)
     ld l, a
     or h
-    jr z, isr_none
+    push bc
     ld a, b
-    call jp_hl
-isr_none:
+    call nz, jp_hl              ; A = linea
     pop bc
-    pop de
-    pop hl
-isr_skip:
-    inc hl
-    inc hl
-    inc b
+    ld a, PIC_PAGE
+    out (PORT_MMIO_PAGE), a
+    ld a, CMD_COMPLETE
+    or b
+    out (PIC_COMMAND), a
     jr isr_next
 isr_done:
     pop af
@@ -238,6 +222,4 @@ info:
 info_name:
     db "INT LX PIC", 0
 
-mask_lo:  db 0
-mask_hi:  db 0
 handlers: ds 32

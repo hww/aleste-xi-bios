@@ -78,8 +78,7 @@ extern "C" {
 #define MMIO_IPC_BASE      0xFF0020UL
 #define MMIO_IPC_SIZE      32
 
-#define MMIO_TIMER_BASE    0xFF0040UL
-#define MMIO_TIMER_SIZE    32
+/* FF0040-FF005F: libre; el temporizador rev 6 esta en los puertos F4..F6 */
 
 #define MMIO_RTC_BASE      0xFF0060UL
 #define MMIO_RTC_SIZE      32

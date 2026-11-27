@@ -96,7 +96,7 @@ public:
     uint8_t  user_slots() const { return slot_user; }
     const uint8_t* banks() const { return bank; }
     uint16_t pic_pend() const { return pic_pending; }
-    uint16_t pic_msk() const { return pic_mask; }
+    uint16_t pic_msk() const { return pic_enable; }
 
     // Callbacks de z80ex
     uint8_t  mread(uint16_t addr, int m1);
@@ -120,20 +120,27 @@ private:
     uint8_t mmio_read(uint32_t a);
     void    mmio_write(uint32_t a, uint8_t v);
 
-    // ---- PIC y temporizador (pagina 0)
-    uint16_t pic_mask = 0, pic_pending = 0;
-    uint8_t  pic_vector = 0;
+    // ---- PIC v2 (pagina 0, 00h-1Fh) y temporizador rev 6 (puertos F4h-F6h),
+    //      como lx_sys.sv
+    uint16_t pic_pending = 0, pic_enable = 0, pic_repeat = 0, pic_insvc = 0;
+    uint8_t  pic_prio[16] = {};
+    uint8_t  pic_vector = 0xFF;
     uint16_t irq_lines = 0, irq_prev = 0;
     void     set_line(int n, bool level);
+    void     pic_raise(uint16_t b);
     void     pic_update();
-    uint8_t  tmr_ctrl = 0;
-    uint16_t tmr_reload = 0, tmr_count = 0, tmr_ticks = 0;
-    uint8_t  tmr_cnt_hi_l = 0, tmr_ticks_hi_l = 0;
-    double   us_acc = 0, ms_acc = 0;
-    // temporizador libre de 1 MHz en F4h-F7h (como mmu_native.sv): la copia de
-    // los 32 bits vale mientras las lecturas lleguen con como mucho tres M1
-    uint32_t us_count = 0, us_snap = 0;
-    int      us_m1 = 4;
+    uint16_t pic_eligible() const { return pic_pending & pic_enable & ~pic_insvc; }
+    uint8_t  pic_claim();
+    void     pic_command(uint8_t v);
+    uint16_t rt = 0, rt_snap_sup = 0, rt_snap_usr = 0, tmr_cmp = 0;
+    uint8_t  tmr_buf_lo = 0;
+    bool     tmr_window = false, tmr_armed = false, tmr_en = false, tmr_fired = false, tmr_due_q = false;
+    int      tmr_win_us = 0;
+    bool     tmr_due() const { return tmr_armed && !((uint16_t)(rt - tmr_cmp) & 0x8000); }
+    void     tmr_fire() { tmr_fired = true; pic_raise(1u << 6); }
+    uint8_t  tmr_read(uint8_t p);
+    void     tmr_write(uint8_t p, uint8_t v);
+    double   us_acc = 0;
     void     timer_us(int n);
 
     // ---- Reloj MC146818 (pagina 0, 60h/61h)

@@ -75,11 +75,12 @@ void Machine::reset() {
     slot_super = 0xFF; slot_user = 0xFF;
     memset(bank, 0, sizeof(bank));
     supervisor = true; exit_pending = false; int_hold = false;
-    pic_mask = pic_pending = 0; pic_vector = 0; irq_lines = irq_prev = 0;
+    pic_pending = pic_enable = pic_repeat = pic_insvc = 0; pic_vector = 0xFF; irq_lines = irq_prev = 0;
+    for (auto& q : pic_prio) q = 0;
     gpu.reset();                                        // LX-GPU parada; el cargador en ROM 0-31
     for (int i = 0; i < 32; i++) gpu.write_rom(i, GPU_BOOT_ROM[i]);
-    tmr_ctrl = 0; tmr_reload = tmr_count = tmr_ticks = 0;
-    us_count = us_snap = 0; us_m1 = 4;
+    rt = rt_snap_sup = rt_snap_usr = tmr_cmp = 0; tmr_buf_lo = 0; tmr_win_us = 0;
+    tmr_window = tmr_armed = tmr_en = tmr_fired = tmr_due_q = false;
     rtc_ram[10] = 0x26; rtc_ram[11] = 0x06;             // como el core: binario, 24 h
     pal_index = pal_ctrl = pal_mod = 0; border = 0x888;
     memset(crtc, 0, sizeof(crtc));
@@ -110,7 +111,6 @@ uint32_t Machine::translate(uint16_t addr) const {
 }
 
 uint8_t Machine::mread(uint16_t addr, int m1) {
-    if (m1 && us_m1 < 4) us_m1++;                        // para la copia del temporizador
     if (legacy()) {
         // al pasar a legacy (el 520EX), como en mmu_native.sv: la salida
         // pendiente se completa en el M1 siguiente
@@ -179,11 +179,7 @@ void Machine::mmu_write(uint8_t r, uint8_t v) {
 uint8_t Machine::pread(uint16_t port) {
     if (legacy()) return leg_pread(port);
     uint8_t p = port & 0xFF;
-    if (p >= 0xF4 && p <= 0xF7) {                       // temporizador: tambien con el bloqueo
-        if (us_m1 >= 4) us_snap = us_count;
-        us_m1 = 0;
-        return (uint8_t)(us_snap >> (8 * (p & 3)));
-    }
+    if (p >= 0xF4 && p <= 0xF7) return tmr_read(p);     // temporizador: tambien con el bloqueo
     if (!supervisor && (mmu_control & 0x10)) return 0xFF;
     if (p < 0x80) return mmio_read(0xFF0000 + mmu_page * 128 + p);
     if (p >= 0xE0) return mmu_read(p, port);
@@ -196,16 +192,22 @@ void Machine::pwrite(uint16_t port, uint8_t v) {
     // llamada al sistema: antes del bloqueo de puertos del usuario, como en
     // mmu_native.sv (OUT (F2h),A entra al supervisor aunque esten bloqueados)
     if (p == 0xF2) { if (!supervisor) int_hold = true; supervisor = true; return; }  // con bloqueo
+    if (p >= 0xF4 && p <= 0xF7) { tmr_write(p, v); return; }   // solo el supervisor
     if (!supervisor && (mmu_control & 0x10)) return;
     if (p < 0x80) mmio_write(0xFF0000 + mmu_page * 128 + p, v);
     else if (p >= 0xE0) mmu_write(p, v);
 }
 
-// ---------------------------------------------------------------- PIC
+// ---------------------------------------------------------------- PIC v2
+void Machine::pic_raise(uint16_t b) {
+    pic_repeat |= pic_pending & b;                         // otro flanco sin atender
+    pic_pending |= b;
+}
+
 void Machine::set_line(int n, bool level) {
     uint16_t b = 1u << n;
     if (level) irq_lines |= b; else irq_lines &= ~b;
-    if ((irq_lines & ~irq_prev) & b) pic_pending |= b;     // flanco de subida
+    if ((irq_lines & ~irq_prev) & b) pic_raise(b);         // flanco de subida
     irq_prev = irq_lines;
 }
 
@@ -217,23 +219,72 @@ void Machine::pic_update() {
     set_line(7, (kin_ctrl & 1) && !kq.empty());
 }
 
-uint8_t Machine::intread() {
-    uint16_t a = pic_pending & pic_mask;
-    int top = 0;
-    for (int i = 0; i < 16; i++) if (a & (1 << i)) top = i;
-    return pic_vector + 2 * top;
+// CLAIM: la de mas prioridad (a igual, la de numero menor) pasa a servicio
+uint8_t Machine::pic_claim() {
+    uint16_t e = pic_eligible();
+    int best = -1;
+    for (int k = 0; k < 16; k++)
+        if ((e >> k) & 1) if (best < 0 || pic_prio[k] > pic_prio[best]) best = k;
+    if (best < 0) return 0x00;
+    uint16_t b = 1u << best;
+    uint8_t v = 0x80 | ((pic_repeat & b) ? 0x40 : 0) | best;
+    pic_pending &= ~b; pic_repeat &= ~b; pic_insvc |= b;
+    return v;
+}
+
+void Machine::pic_command(uint8_t v) {
+    uint16_t b = 1u << (v & 15);
+    if (v & 0x80) { pic_prio[v & 15] = (v >> 4) & 7; return; }
+    switch ((v >> 4) & 7) {
+    case 1: pic_insvc &= ~b; break;                       // COMPLETE
+    case 2: pic_enable |= b; break;                       // ENABLE
+    case 3: pic_enable &= ~b; break;                      // DISABLE
+    case 4: pic_pending &= ~b; break;                     // CLEAR_PENDING
+    case 5: pic_repeat &= ~b; break;                      // CLEAR_REPEAT
+    case 6: pic_pending &= ~b; pic_repeat &= ~b; break;   // CLEAR_BOTH
+    }
+}
+
+// el vector del acuse (IM 2; en IM 0, FFh = RST 38h)
+uint8_t Machine::intread() { return pic_vector; }
+
+// ---------------------------------------------------------------- temporizador rev 6
+uint8_t Machine::tmr_read(uint8_t p) {
+    uint16_t& snap = supervisor ? rt_snap_sup : rt_snap_usr;
+    switch (p) {
+    case 0xF4: snap = rt; return (uint8_t)snap;
+    case 0xF5: return (uint8_t)(snap >> 8);
+    case 0xF6: return (tmr_fired ? 0x10 : 0) | (tmr_due() ? 0x08 : 0) | (tmr_window ? 0x04 : 0)
+                    | (tmr_armed ? 0x02 : 0) | (tmr_en ? 0x01 : 0);
+    }
+    return 0xFF;
+}
+
+void Machine::tmr_write(uint8_t p, uint8_t v) {
+    if (!supervisor) return;
+    switch (p) {
+    case 0xF4: tmr_buf_lo = v; tmr_window = true; tmr_win_us = 0; break;
+    case 0xF5:
+        tmr_cmp = (uint16_t)(v << 8 | tmr_buf_lo);
+        tmr_window = false; tmr_win_us = 0;
+        tmr_armed = tmr_en = true; tmr_fired = false;
+        if (tmr_due()) tmr_fire();                        // objetivo ya pasado: al armar
+        tmr_due_q = tmr_due();
+        break;
+    case 0xF6:
+        tmr_en = v & 1;
+        if (tmr_en && tmr_due() && !tmr_fired) tmr_fire();
+        break;
+    }
 }
 
 void Machine::timer_us(int n) {
-    us_count += (uint32_t)n;
     while (n--) {
-        if (++ms_acc >= 1000) { ms_acc = 0; tmr_ticks++; }
-        if (tmr_ctrl & 1) {
-            if (tmr_count == 1) {
-                pic_pending |= 1u << 6;
-                if (tmr_ctrl & 2) tmr_count = tmr_reload; else { tmr_count = 0; tmr_ctrl &= ~1; }
-            } else tmr_count--;
-        }
+        rt++;
+        if (tmr_window && ++tmr_win_us >= 32) { tmr_window = false; tmr_win_us = 0; }
+        bool d = tmr_due();
+        if (tmr_en && d && !tmr_due_q && !tmr_fired) tmr_fire();   // una vez por armado
+        tmr_due_q = d;
     }
 }
 
@@ -468,19 +519,13 @@ uint8_t Machine::mmio_read(uint32_t a) {
     case 0:
         if (r < 0x20) {
             switch (r) {
-            case 0: return pic_mask; case 1: return pic_mask >> 8; case 2: return pic_vector;
-            case 3: return pic_pending & pic_mask; case 4: return (pic_pending & pic_mask) >> 8;
-            case 5: return pic_pending; case 6: return pic_pending >> 8;
-            }
-            return 0xFF;
-        }
-        if (r >= 0x40 && r < 0x60) {
-            switch (r) {
-            case 0x40: return tmr_ctrl; case 0x41: return tmr_reload; case 0x42: return tmr_reload >> 8;
-            case 0x43: tmr_cnt_hi_l = tmr_count >> 8; return tmr_count;
-            case 0x44: return tmr_cnt_hi_l;
-            case 0x45: tmr_ticks_hi_l = tmr_ticks >> 8; return tmr_ticks;
-            case 0x46: return tmr_ticks_hi_l;
+            case 0x01: return pic_claim();
+            case 0x02: return pic_vector;
+            case 0x03: return pic_pending;      case 0x04: return pic_pending >> 8;
+            case 0x05: return pic_repeat;       case 0x06: return pic_repeat >> 8;
+            case 0x07: return pic_insvc;        case 0x08: return pic_insvc >> 8;
+            case 0x09: return pic_enable;       case 0x0A: return pic_enable >> 8;
+            case 0x0B: return pic_eligible();   case 0x0C: return pic_eligible() >> 8;
             }
             return 0xFF;
         }
@@ -535,19 +580,9 @@ void Machine::mmio_write(uint32_t a, uint8_t v) {
     switch (page) {
     case 0:
         if (r < 0x20) {
-            switch (r) {
-            case 0: pic_mask = (pic_mask & 0xFF00) | v; break;
-            case 1: pic_mask = (pic_mask & 0x00FF) | (v << 8); break;
-            case 2: pic_vector = v; break;
-            case 7: pic_pending &= ~v; break;
-            case 8: pic_pending &= ~(v << 8); break;
-            }
-        } else if (r >= 0x40 && r < 0x60) {
-            switch (r) {
-            case 0x40: if ((v & 1) && !(tmr_ctrl & 1)) tmr_count = tmr_reload; tmr_ctrl = v; break;
-            case 0x41: tmr_reload = (tmr_reload & 0xFF00) | v; break;
-            case 0x42: tmr_reload = (tmr_reload & 0x00FF) | (v << 8); break;
-            }
+            if (!supervisor) break;                       // COMMAND y VECTOR: solo el supervisor
+            if (r == 0x00) pic_command(v);
+            else if (r == 0x02) pic_vector = v;
         } else if (r == 0x60) rtc_idx = v & 63;
         else if (r == 0x61) rtc_write(rtc_idx, v);
         break;
@@ -664,7 +699,7 @@ int Machine::step() {
         leg_since += t;
     } else {
         pic_update();
-        if ((pic_pending & pic_mask) && !int_hold && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
+        if (pic_eligible() && !int_hold && !tmr_window && z80ex_int_possible(cpu)) t = z80ex_int(cpu);
         else t = z80ex_step(cpu);
         if (t <= 0) t = 4;
         gpu.tick(t);                                    // GPU a 54 MHz: 3 ciclos por cada uno del Z80
@@ -693,7 +728,7 @@ bool Machine::run_frame() {
         step();
     }
     frame_acc -= frame_cycles;
-    pic_pending |= 1u << 2;                                      // VBlank
+    pic_raise(1u << 2);                                          // VBlank
     return true;
 }
 

@@ -119,12 +119,12 @@ start:  ld de, m_banner
         ld (sv_page), a
         xor a
         out (0F1h), a
-        in a, (00h)
+        in a, (09h)            ; PIC v2: ENABLE_L
         ld (sv_mask), a
         if VBLANK
-        or 04h
-        endif
+        ld a, 22h              ; ENABLE, linea 2
         out (00h), a
+        endif
         ld a, (sv_page)
         out (0F1h), a
         ; ---- al usuario: RET de su pila (0100h)
@@ -229,10 +229,16 @@ finish: di
         out (0F0h), a
         ld a, (sv_fb)
         out (0FBh), a
-        xor a                  ; la mascara del PIC como estaba
+        xor a                  ; la linea 2 del PIC como estaba
         out (0F1h), a
+        if VBLANK
         ld a, (sv_mask)
+        and 04h
+        jr nz, fin_vb          ; ya estaba habilitada
+        ld a, 32h              ; DISABLE, linea 2
         out (00h), a
+fin_vb:
+        endif
         ld a, (sv_page)
         out (0F1h), a
         ld a, (4000h)          ; el 4000h del nucleo: debe seguir a 0

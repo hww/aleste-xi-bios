@@ -4,7 +4,7 @@
 ;
 ; La GPU (irq.asm) hace IRQ 42h, espera unos 300 us, hace IRQ 43h y para. Con
 ; las interrupciones cortadas, el Z80 mira el pendiente de la linea 5 en el PIC
-; (pagina MMIO 0: 5 PEND_LO, 7 CLEAR_LO) y lee IRQ_CODE:
+; (PIC v2, pagina MMIO 0: 3 PENDING_L, 0 COMMAND) y lee IRQ_CODE:
 ;  1. espera el pendiente de la 42h y lee IRQ_CODE (42h), lo que la reconoce;
 ;  2. borra el pendiente del PIC: tiene que quedar a 0 (la linea ya bajo);
 ;  3. espera la parada (STATUS 80h): el pendiente vuelve (la 43h es un flanco
@@ -13,6 +13,7 @@
 ; pasmo gpuirq.asm GPUIRQ.COM
 PIC      equ 0                 ; pagina MMIO del PIC
 L5       equ 20h               ; bit de la linea 5
+CLR5     equ 45h               ; COMMAND: CLEAR_PENDING (4), linea 5
         org 100h
         ld de, m_hello
         call pstr
@@ -22,13 +23,13 @@ L5       equ 20h               ; bit de la linea 5
         call load_pk
         xor a                  ; nada pendiente de antes en la linea 5
         out (PAGE), a
-        ld a, L5
-        out (7), a
+        ld a, CLR5             ; CLEAR_PENDING, linea 5
+        out (0), a
         call gpu_start
         ld a, PIC              ; 1. el pendiente de la 42h
         out (PAGE), a
         ld bc, 0
-w1:     in a, (5)
+w1:     in a, (3)
         and L5
         jr nz, g1
         dec bc
@@ -42,16 +43,16 @@ g1:     ld (p1), a
         ld (c1), a
         ld a, PIC              ; 2. borrar: queda a 0
         out (PAGE), a
-        ld a, L5
-        out (7), a
-        in a, (5)
+        ld a, CLR5             ; CLEAR_PENDING, linea 5
+        out (0), a
+        in a, (3)
         and L5
         ld (p2), a
         call gpu_wait          ; 3. la parada y la 43h
         ld (st), a
         ld a, PIC
         out (PAGE), a
-        in a, (5)
+        in a, (3)
         and L5
         ld (p3), a
         ld a, GPU
@@ -60,9 +61,9 @@ g1:     ld (p1), a
         ld (c2), a
         ld a, PIC              ; 4. borrar: queda a 0
         out (PAGE), a
-        ld a, L5
-        out (7), a
-        in a, (5)
+        ld a, CLR5             ; CLEAR_PENDING, linea 5
+        out (0), a
+        in a, (3)
         and L5
         ld (p4), a
         call map_out
