@@ -8,19 +8,22 @@
 ; mueve. La pantalla es de 8 bpp en C50000h (pagina C5h, 320 x 200).
 .org 0x20
         LDI     R0, #0x01C5     ; 8 bpp, pagina C5h
-        MOV     PAGE0, R0       ; CH0 lee el texto
-        MOV     PAGE1, R0       ; CH1 escribe el titulo
-        MOV     IDXH0, #0
-        MOV     IDXH1, #0
-        MOV     STEP0, #1
-        MOV     STEP1, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0       ; CH0 lee el texto
+        MOV     MODE_PAGE1, R0       ; CH1 escribe el titulo
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     DXI1, #1
+        MOV     BANK, #0
+        MOV     YI0, #0
+        MOV     YI1, #0
         LDI     R10, #61528     ; origen: 192 * 320 + 88
         LDI     R11, #1368      ; destino: 4 * 320 + 88
         LDI     R12, #16        ; color de la fila
         LDI     R13, #16        ; filas de destino
         LDI     R14, #320
-row:    MOV     IDX0, R10
-        MOV     IDX1, R11
+row:    MOV     XI0, R10
+        MOV     XI1, R11
         LDI     R0, #72
         MOV     LOOP_CNT, R0
         LDI     LOOP_TGT, #px

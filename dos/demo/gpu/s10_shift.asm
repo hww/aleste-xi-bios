@@ -18,10 +18,13 @@
         SHR     R15, #8
         MOV     R0, R16
         AND     R0, #0xFF
-        MOV     PAGE0, R0
-        MOV     STEP0, #1
-        MOV     PAGE1, R29
-        MOV     STEP1, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0
+        MOV     MODE_PAGE1, R29
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     DXI1, #1
+        MOV     BANK, #0
         MOV     R1, R17         ; palabras por linea del destino
         SHR     R1, R15
         MOV     R2, R18         ; palabras visibles
@@ -61,8 +64,8 @@ vmod:   CMP     R5, R31
         SUB     R5, R31
         JMP     vmod
 vok:    MUL     R5, R30         ; primera palabra de la linea de la imagen
-        MOV     IDXH0, #0
-        MOV     IDX0, R4
+        MOV     YI0, #0
+        MOV     XI0, R4
         MOV     R7, R2          ; palabras que faltan en el destino
 seg:    MOV     R8, R30         ; tramo: hasta el final de la linea de la imagen
         SUB     R8, R6
@@ -71,8 +74,8 @@ seg:    MOV     R8, R30         ; tramo: hasta el final de la linea de la imagen
         MOV     R8, R7
 s1:     MOV     R0, R5
         ADD     R0, R6
-        MOV     IDXH1, #0
-        MOV     IDX1, R0
+        MOV     YI1, #0
+        MOV     XI1, R0
         MOV     LOOP_CNT, R8
         LDI     LOOP_TGT, #cp
 cp:     MOV     R0, DATA1

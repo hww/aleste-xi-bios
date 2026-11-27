@@ -8,12 +8,15 @@
         AND     R0, #-256
         OR      R0, R25
         ADD     R0, #4
-        MOV     PAGE0, R0
-        MOV     STEP0, #1
-        MOV     IDXH0, #0
-        MOV     IDX0, ZERO
-        MOV     PAGE3, R26
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0
+        MOV     MODE_PAGE3, R26
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
+        MOV     YI0, #0
+        MOV     XI0, ZERO
         MOV     R2, ZERO
 g32y:   MOV     R1, ZERO
 g32p:   MOV     R3, R1          ; d2 = (2x - 31)^2 + (2y - 31)^2
@@ -38,8 +41,8 @@ g32p:   MOV     R3, R1          ; d2 = (2x - 31)^2 + (2y - 31)^2
         MUL     R5, #4
         ADD     R0, R5
         ADD     R0, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R0
+        MOV     YI3, #0
+        MOV     XI3, R0
         MOV     R7, DATA3
 g32w:   MOV     DATA0, R7
         ADD     R1, #1

@@ -3,10 +3,15 @@
 ; bloque de parametros P0-P15, que se copian a R16-R31 (ver demo.h).
         LDI     R30, #0
         LDI     R31, #0
-        MOV     PAGE3, R31
-        MOV     IDXH3, #0
-        MOV     STEP3, #1
-        MOV     IDX3, R30
+; Canales v2: BANK vale 0 (POS) en todo el programa; cada escritura de otro
+; banco (DXI = STEP, MODE_PAGE) lo cambia y lo deja otra vez en 0.
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R31
+        MOV     BANK, #1
+        MOV     DXI3, #1
+        MOV     BANK, #0
+        MOV     YI3, #0
+        MOV     XI3, R30
         MOV     R16, DATA3      ; P0 destino {modo, pagina}
         MOV     R17, DATA3      ; P1 ancho de linea
         MOV     R18, DATA3      ; P2 ancho visible

@@ -12,18 +12,21 @@
 .org 0x20
         .include "common.inc"
         .include "bgfill.inc"
-        MOV     PAGE1, R24      ; CH1 lee los objetos, CH2 los escribe
-        MOV     PAGE2, R24
-        MOV     STEP1, #1
-        MOV     STEP2, #1
-        MOV     PAGE3, R26      ; CH3: la tabla de colores
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE1, R24      ; CH1 lee los objetos, CH2 los escribe
+        MOV     MODE_PAGE2, R24
+        MOV     MODE_PAGE3, R26      ; CH3: la tabla de colores
+        MOV     BANK, #1
+        MOV     DXI1, #1
+        MOV     DXI2, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
         MOV     R12, R31        ; semilla
         TST     R22, #1
         JMP.EQ  draw
         ; ---- crear N lineas
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
 ini:    MOV     R13, R18        ; largo: 8 .. ancho/2
         SHR     R13, #1
@@ -54,10 +57,10 @@ ini:    MOV     R13, R18        ; largo: 8 .. ancho/2
         JMP.NE  ini
         FLUSH   2
         ; ---- mover y dibujar
-draw:   MOV     IDXH1, #0
-        MOV     IDX1, ZERO
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+draw:   MOV     YI1, #0
+        MOV     XI1, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
 line:   MOV     R5, DATA1       ; x
         MOV     R6, DATA1       ; y
@@ -80,8 +83,8 @@ inside: MOV     DATA2, R5
         MOV     DATA2, R8
         AND     R8, #15         ; color de la tabla
         ADD     R8, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R8
+        MOV     YI3, #0
+        MOV     XI3, R8
         MOV     R8, DATA3
         MOV     R1, R5
         MOV     R2, R6

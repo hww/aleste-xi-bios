@@ -92,7 +92,7 @@ read (`MOV.EQ ZERO, DATA0`), which only advances its index.
 | `gpudemo.c` | modes, measuring, budget search, summary |
 | `scenes.c` | the scenes |
 | `hw.c` | ports, timer, VBlank, CRTC, palette, GPU |
-| `gpu/*.asm` | microprograms. They start with `common.inc` (the parameter block into R16–R31). `bgfill.inc` is the background, `subs.inc` holds `rnd` and `xy0` (pixel address with IDXH), and `gen32.inc` and `objmove.inc` are shared by scenes 8 and 9. |
+| `gpu/*.asm` | microprograms. They start with `common.inc` (the parameter block into R16–R31). `bgfill.inc` is the background, `subs.inc` holds `rnd` and `xy0` (pixel address in YI and XI), and `gen32.inc` and `objmove.inc` are shared by scenes 8 and 9. |
 | `mkpkth.py` | assembles a microprogram (expanding `.include`) into a loader packet as a C array, `pk_*.h` |
 | `build.sh` | runs mkpkth.py for every microprogram |
 
@@ -102,6 +102,7 @@ read (`MOV.EQ ZERO, DATA0`), which only advances its index.
 
 **Microcode notes:**
 
-- **IDXH and IDX.** Write IDXH before IDX: writing IDX uses IDXH and clears it.
-- **1 bpp channels.** The channel index is a signed 19-bit number, so in 1 bpp a channel only reaches the first 32 KB of its page. That is why the font is copied to the start of page 26h.
+- **Channels v2.** The microprograms use the channels in linear mode (PITCH = 0): the pixel index is `{YI[2:0], XI}`, the step is DXI, and MODE_PAGE holds the format and the page. BANK stays at 0 (POS) all the time: a write to DXI (bank 1) or MODE_PAGE (bank 4) selects its bank and goes back to 0 right after, so the position writes in the loops need no bank change.
+- **YI and XI.** Write both: unlike the old IDX, writing XI does not clear YI.
+- **Packet sizes.** The packets are copied into fixed slots (`PK_SCENE_W`, `PK_OV_W`, `PK_MISC_W` words in `demo.h`); `PK_FITS` stops the build if a microprogram grows past its slot.
 - **Page changes.** Before lx-gpu-rtl c5d4911, writing to PAGE the page the channel already had did not cancel a pending page change (A → B → A with no access in between left B). It is fixed there; the demo avoids the pattern anyway.

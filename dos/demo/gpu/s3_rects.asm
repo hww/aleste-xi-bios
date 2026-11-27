@@ -11,18 +11,21 @@
 .org 0x20
         .include "common.inc"
         .include "bgfill.inc"
-        MOV     PAGE1, R24
-        MOV     PAGE2, R24
-        MOV     STEP1, #1
-        MOV     STEP2, #1
-        MOV     PAGE3, R26
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE1, R24
+        MOV     MODE_PAGE2, R24
+        MOV     MODE_PAGE3, R26
+        MOV     BANK, #1
+        MOV     DXI1, #1
+        MOV     DXI2, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
         MOV     R12, R31
         TST     R22, #1
         JMP.EQ  draw
         ; ---- crear N cuadrados
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
 ini:    MOV     R13, R18        ; x: 0 .. ancho - lado
         SUB     R13, R23
@@ -46,10 +49,10 @@ ini:    MOV     R13, R18        ; x: 0 .. ancho - lado
         JMP.NE  ini
         FLUSH   2
         ; ---- mover y dibujar
-draw:   MOV     IDXH1, #0
-        MOV     IDX1, ZERO
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+draw:   MOV     YI1, #0
+        MOV     XI1, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
 obj:    MOV     R5, DATA1       ; x
         MOV     R6, DATA1       ; y
@@ -73,8 +76,8 @@ inside: MOV     DATA2, R5
         MOV     DATA2, ZERO
         AND     R8, #15         ; color de la tabla
         ADD     R8, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R8
+        MOV     YI3, #0
+        MOV     XI3, R8
         MOV     R8, DATA3
         MOV     R7, R6          ; filas visibles: [max(y,0), min(y+lado, alto))
         ADD     R7, R23

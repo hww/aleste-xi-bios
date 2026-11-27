@@ -65,6 +65,13 @@ uint8_t  gpu_run_scene(void);
 void     gpu_copy(uint8_t src_page, uint16_t src_w, uint8_t dst_page, uint16_t dst_w, uint16_t words);
 void     pal_restore(void);
 
+/* Huecos de los paquetes en la memoria de GPUDEMO, en palabras (2 + 2 por
+   instruccion). PK_FITS falla al compilar si un microprograma no cabe. */
+#define PK_SCENE_W 700
+#define PK_OV_W    200
+#define PK_MISC_W  140
+#define PK_FITS(pk, w) typedef char pk##_fits[(sizeof(pk) / 2 <= (w)) ? 1 : -1]
+
 /* scenes.c */
 void     scene_run(uint8_t n);
 void     scene_frame(uint16_t f);

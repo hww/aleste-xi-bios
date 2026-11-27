@@ -5,10 +5,13 @@
 .org 0x20
         .include "common.inc"
         AND     R16, #0xFF
-        MOV     PAGE0, R16
-        MOV     IDXH0, #0
-        MOV     STEP0, #1
-        MOV     IDX0, ZERO
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R16
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     BANK, #0
+        MOV     YI0, #0
+        MOV     XI0, ZERO
         MOV     LOOP_CNT, R30
         LDI     LOOP_TGT, #fill
 fill: L MOV     DATA0, R29

@@ -19,29 +19,35 @@
 ; semilla, 1010h las estrellas.
 .org 0x20
         LDI     R0, #0x0094     ; 16 bpp, pagina 94h
-        MOV     PAGE2, R0       ; CH2 lee los datos
-        MOV     PAGE3, R0       ; CH3 los escribe
-        MOV     IDXH2, #0
-        MOV     IDXH3, #0
-        MOV     STEP2, #1
-        MOV     STEP3, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE2, R0       ; CH2 lee los datos
+        MOV     MODE_PAGE3, R0       ; CH3 los escribe
+        MOV     BANK, #1
+        MOV     DXI2, #1
+        MOV     DXI3, #1
+        MOV     BANK, #0
+        MOV     YI2, #0
+        MOV     YI3, #0
         LDI     R0, #0x01C5     ; 8 bpp, pagina C5h
-        MOV     PAGE0, R0       ; CH0: un pixel cada vez (lee y escribe)
-        MOV     PAGE1, R0       ; CH1: filas de los medidores
-        MOV     IDXH0, #0
-        MOV     IDXH1, #0
-        MOV     STEP0, #0
-        MOV     STEP1, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0       ; CH0: un pixel cada vez (lee y escribe)
+        MOV     MODE_PAGE1, R0       ; CH1: filas de los medidores
+        MOV     BANK, #1
+        MOV     DXI0, #0
+        MOV     DXI1, #1
+        MOV     BANK, #0
+        MOV     YI0, #0
+        MOV     YI1, #0
 
         ; ---- 1. estrellas
         LDI     R0, #0x1008
-        MOV     IDX2, R0
+        MOV     XI2, R0
         MOV     R20, DATA2      ; semilla
         LDI     R24, #25173     ; R20 = R20 * 25173 + 13849
         LDI     R25, #13849
         LDI     R23, #5120      ; 320 * 16
         LDI     R0, #0x1010
-        MOV     IDX2, R0
+        MOV     XI2, R0
         MOV     R21, R0         ; donde se escribe la estrella
         LDI     R22, #160         ; estrellas (NSTARS en mag.asm)
 star:   MOV     R1, DATA2       ; x * 16
@@ -53,7 +59,7 @@ star:   MOV     R1, DATA2       ; x * 16
         MOV     R6, R1
         SHR     R6, #4
         ADD     R5, R6
-        MOV     IDX0, R5
+        MOV     XI0, R5
         MOV     R7, DATA0
         CMP     R7, R4
         MOV.EQ  DATA0, ZERO
@@ -71,22 +77,22 @@ same:   MOV     R5, R2          ; la pinta sobre el fondo
         MOV     R6, R1
         SHR     R6, #4
         ADD     R5, R6
-        MOV     IDX0, R5
+        MOV     XI0, R5
         MOV     R7, DATA0 !f
         MOV.EQ  DATA0, R4
-        MOV     IDX3, R21       ; guarda x e y
+        MOV     XI3, R21       ; guarda x e y
         MOV     DATA3, R1
         MOV     DATA3, R2
         ADD     R21, #4
         SUB     R22, #1
         JMP.NE  star
         LDI     R0, #0x1008
-        MOV     IDX3, R0
+        MOV     XI3, R0
         MOV     DATA3, R20
 
         ; ---- 2. medidores
         LDI     R0, #0x1000
-        MOV     IDX2, R0
+        MOV     XI2, R0
         LDI     R10, #42276       ; barra del canal 0: 132 * 320 + 36
         LDI     R11, #4         ; canales
         LDI     R19, #2         ; interior del recuadro
@@ -95,7 +101,7 @@ chan:   MOV     R12, DATA2      ; ancho
         MOV     R13, DATA2      ; pico
         MOV     R14, R10
         LDI     R15, #6         ; filas
-row:    MOV     IDX1, R14
+row:    MOV     XI1, R14
         LDI     R16, #64        ; color del primer grupo de 4 pixeles
         MOV     R17, R12
         SHR     R17, #2         ; grupos llenos
@@ -120,7 +126,7 @@ peak:   MOV     R0, R13 !f
         JMP.EQ  nextr
         MOV     R5, R14
         ADD     R5, R13
-        MOV     IDX1, R5
+        MOV     XI1, R5
         MOV     DATA1, R9
         MOV     DATA1, R9
 nextr:  ADD     R14, #320

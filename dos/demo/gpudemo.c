@@ -30,6 +30,9 @@
 #include "pk_clear.h"
 #include "pk_overlay.h"
 #include "pk_copy.h"
+PK_FITS(pk_clear, PK_MISC_W);
+PK_FITS(pk_copy, PK_MISC_W);
+PK_FITS(pk_overlay, PK_OV_W);
 
 #define BUF0 0xC5
 #define BUF1 0xC6
@@ -415,9 +418,9 @@ int main(int argc, char** argv) {
     PO = p; p += 16;
     ov_text = (char*)p; p += 32;
     font = (uint8_t*)p; p += 384;
-    pk_scene = p; p += 1000;
-    pk_ov = p; p += 160;
-    pk_misc = p; p += 80;
+    pk_scene = p; p += PK_SCENE_W;
+    pk_ov = p; p += PK_OV_W;
+    pk_misc = p; p += PK_MISC_W;
     pk_misc_phys = phys(pk_misc);
     pk_scene_phys = phys(pk_scene);
     pk_ov_phys = phys(pk_ov);

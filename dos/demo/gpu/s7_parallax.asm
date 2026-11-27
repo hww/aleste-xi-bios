@@ -17,10 +17,13 @@
         ; ---- fondo: degradado por franjas, en palabras
         MOV     R0, R16
         AND     R0, #0xFF
-        MOV     PAGE0, R0
-        MOV     STEP0, #1
-        MOV     PAGE3, R26
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0
+        MOV     MODE_PAGE3, R26
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
         MOV     R1, R17         ; palabras por linea
         SHR     R1, R15
         MOV     R2, R18         ; palabras visibles
@@ -31,11 +34,11 @@ bgr:    MOV     R5, R4
         SHR     R5, #3
         AND     R5, #15
         ADD     R5, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R5
+        MOV     YI3, #0
+        MOV     XI3, R5
         MOV     R5, DATA3
-        MOV     IDXH0, #0
-        MOV     IDX0, R3
+        MOV     YI0, #0
+        MOV     XI0, R3
         MOV     LOOP_CNT, R2
         LDI     LOOP_TGT, #bgp
 bgp:  L MOV     DATA0, R5
@@ -45,13 +48,19 @@ bgp:  L MOV     DATA0, R5
         JMP.NE  bgr
         FLUSH   0
         ; ---- capas
-        MOV     PAGE0, R16
-        MOV     STEP0, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R16
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     BANK, #0
         MOV     R0, R16
         AND     R0, #-256
         OR      R0, R25
-        MOV     PAGE3, R0       ; CH3: tiles
-        MOV     STEP3, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R0       ; CH3: tiles
+        MOV     BANK, #1
+        MOV     DXI3, #1
+        MOV     BANK, #0
         MOV     R13, R18        ; R13 = columnas visibles
         SHR     R13, #3
         MOV     R9, ZERO        ; capa
@@ -112,8 +121,8 @@ lx2:    CMP     R7, #0
         MOV     R2, R6
         MUL     R2, #8
         MOV     R8, ZERO
-ltr:    MOV     IDXH3, #0
-        MOV     IDX3, R4
+ltr:    MOV     YI3, #0
+        MOV     XI3, R4
         CALL    xy0
         MOV     LOOP_CNT, R7
         LDI     LOOP_TGT, #lkp

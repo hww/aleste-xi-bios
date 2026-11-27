@@ -12,9 +12,8 @@
 ; izquierda. P7 = lado | desplazamiento del sombreado << 8.
 ; Objetos (pagina P8, 16 bpp, 4 palabras): x, y, direccion (bit 0 x hacia la
 ; izquierda, bit 1 y hacia arriba), bola (0-3).
-; Ojo: CH3 no vuelve a la tabla entre sprites. En ch_cache, escribir en PAGE la
-; pagina que ya tiene el canal no anula un cambio de pagina pendiente (de otra
-; escritura anterior sin acceso en medio): A -> B -> A seguidos deja B.
+; CH3 no vuelve a la tabla entre sprites (antes de b8eb280, en ch_cache, A -> B
+; -> A seguidos en MODE_PAGE dejaba B; ahora deja A, pero no hace falta).
 ; P13 fondo, P14 tabla: 4 colores x 3 tonos (oscuro, medio, claro) en 4 bpp
 ; o 4 bases de rampa en 8 bpp, P15 semilla.
 .org 0x20
@@ -22,22 +21,30 @@
         MOV     R15, R23        ; desplazamiento del sombreado
         SHR     R15, #8
         AND     R23, #0xFF      ; lado
-        MOV     PAGE3, R26      ; CH3: tabla
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R26      ; CH3: tabla
+        MOV     BANK, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
         MOV     R12, R31
         TST     R22, #2
         JMP.EQ  noimg
         ; ---- crear las cuatro bolas
-        MOV     STEP3, #1       ; la tabla se lee seguida
+        MOV     BANK, #1
+        MOV     DXI3, #1       ; la tabla se lee seguida
+        MOV     BANK, #0
         MOV     R9, ZERO        ; bola
 gimg:   MOV     R0, R16         ; CH0 en la pagina P9 + bola, formato del destino
         AND     R0, #-256
         ADD     R0, R25
         ADD     R0, R9
-        MOV     PAGE0, R0
-        MOV     STEP0, #1
-        MOV     IDXH0, #0
-        MOV     IDX0, ZERO
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     BANK, #0
+        MOV     YI0, #0
+        MOV     XI0, ZERO
         MOV     R2, ZERO        ; y
 gy:     MOV     R1, ZERO        ; x
 gx:     MOV     R3, R1          ; dx = 2x + 1 - lado
@@ -74,8 +81,8 @@ gx:     MOV     R3, R1          ; dx = 2x + 1 - lado
 g1:     MOV     R0, R9          ; tabla: base de la bola
         MUL     R0, #4
         ADD     R0, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R0
+        MOV     YI3, #0
+        MOV     XI3, R0
         MOV     R7, DATA3       ; 8 bpp: base de la rampa; 4 bpp: oscuro
         MOV     R0, R16
         SHR     R0, #8
@@ -102,15 +109,18 @@ gput:   MOV     DATA0, R7
         CMP     R9, #4
         JMP.NE  gimg
 noimg:  .include "bgfill.inc"
-        MOV     PAGE1, R24      ; CH1/CH2: objetos
-        MOV     PAGE2, R24
-        MOV     STEP1, #1
-        MOV     STEP2, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE1, R24      ; CH1/CH2: objetos
+        MOV     MODE_PAGE2, R24
+        MOV     BANK, #1
+        MOV     DXI1, #1
+        MOV     DXI2, #1
+        MOV     BANK, #0
         TST     R22, #1
         JMP.EQ  draw
         ; ---- crear N sprites
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
 ini:    MOV     R13, R18        ; x: -lado/2 .. ancho - lado/2
         CALL    rnd
@@ -134,10 +144,10 @@ ini:    MOV     R13, R18        ; x: -lado/2 .. ancho - lado/2
         JMP.NE  ini
         FLUSH   2
         ; ---- mover y dibujar
-draw:   MOV     IDXH1, #0
-        MOV     IDX1, ZERO
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+draw:   MOV     YI1, #0
+        MOV     XI1, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
         MOV     R15, R23        ; R15 = lado / 2
         SHR     R15, #1
@@ -211,14 +221,17 @@ k4:     SUB     R11, R2         ; filas visibles
         AND     R0, #-256
         ADD     R0, R25
         ADD     R0, R8
-        MOV     PAGE3, R0
-        MOV     STEP3, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R0
+        MOV     BANK, #1
+        MOV     DXI3, #1
+        MOV     BANK, #0
         MOV     R13, R4         ; primer pixel de la bola: sy * lado + sx
         MUL     R13, R23
         ADD     R13, R3
         MOV     R7, R10         ; R7 = ancho visible (la direccion ya esta guardada)
-srow:   MOV     IDXH3, #0
-        MOV     IDX3, R13
+srow:   MOV     YI3, #0
+        MOV     XI3, R13
         MOV     R14, R10        ; xy0 usa R10/R11: guardar
         MOV     R8, R11
         CALL    xy0

@@ -12,11 +12,14 @@
 .org 0x20
         .include "common.inc"
         AND     R16, #0xFF      ; 16 bpp, la pagina del destino
-        MOV     PAGE0, R16
-        MOV     IDXH0, #0
-        MOV     STEP0, #1
-        MOV     PAGE1, R26      ; CH1: la tabla de colores (16 bpp)
-        MOV     STEP1, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R16
+        MOV     MODE_PAGE1, R26      ; CH1: la tabla de colores (16 bpp)
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     DXI1, #0
+        MOV     BANK, #0
+        MOV     YI0, #0
         MOV     R1, ZERO        ; y
         MOV     R2, ZERO        ; primera palabra de la linea
 row:    MOV     R3, R1          ; color = tabla[(y / 8 + cuadro) & 15]
@@ -24,10 +27,10 @@ row:    MOV     R3, R1          ; color = tabla[(y / 8 + cuadro) & 15]
         ADD     R3, R21
         AND     R3, #15
         ADD     R3, R31
-        MOV     IDXH1, #0
-        MOV     IDX1, R3
+        MOV     YI1, #0
+        MOV     XI1, R3
         MOV     R3, DATA1
-        MOV     IDX0, R2
+        MOV     XI0, R2
         MOV     LOOP_CNT, R30
         LDI     LOOP_TGT, #fill
 fill: L MOV     DATA0, R3

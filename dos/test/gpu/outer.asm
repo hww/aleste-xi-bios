@@ -30,11 +30,15 @@ inner_loop:
         RET                      ; PC=0x033
 store:
         LDI     R5, #0x0080      ; FMT=0 (16 bpp), PAGE=80h
-        MOV     PAGE1, R5
+        MOV     BANK, #4
+        MOV     MODE_PAGE1, R5
+        MOV     BANK, #0
         LDI     R5, #1
-        MOV     STEP1, R5
-        MOV     IDXH1, #0
-        MOV     IDX1, #1
+        MOV     BANK, #1
+        MOV     DXI1, R5
+        MOV     BANK, #0
+        MOV     YI1, #0
+        MOV     XI1, #1
         MOV     DATA1, R0
         FLUSH   1
         HALT

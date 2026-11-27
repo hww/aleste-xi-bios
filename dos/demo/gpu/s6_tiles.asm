@@ -15,8 +15,11 @@
         .include "common.inc"
         MOV     R15, R16        ; R15 = desplazamiento pixeles -> palabras: 1 o 2
         SHR     R15, #8
-        MOV     PAGE3, R26      ; CH3: tabla
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R26      ; CH3: tabla
+        MOV     BANK, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
         MOV     R12, R31
         TST     R22, #2
         JMP.EQ  noimg
@@ -24,15 +27,18 @@
         MOV     R0, R16
         AND     R0, #-256
         OR      R0, R25
-        MOV     PAGE0, R0
-        MOV     STEP0, #1
-        MOV     IDXH0, #0
-        MOV     IDX0, ZERO
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R0
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     BANK, #0
+        MOV     YI0, #0
+        MOV     XI0, ZERO
         MOV     R9, ZERO        ; tile
 gt:     MOV     R0, R9          ; color del tile
         ADD     R0, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R0
+        MOV     YI3, #0
+        MOV     XI3, R0
         MOV     R8, DATA3
         MOV     R2, ZERO        ; y
 gy:     MOV     R1, ZERO        ; x
@@ -89,10 +95,13 @@ noimg:  MOV     R13, R18        ; columnas y filas de tiles
         ; ---- crear N gemas
         TST     R22, #1
         JMP.EQ  base
-        MOV     PAGE2, R24
-        MOV     STEP2, #1
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+        MOV     BANK, #4
+        MOV     MODE_PAGE2, R24
+        MOV     BANK, #1
+        MOV     DXI2, #1
+        MOV     BANK, #0
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
         MOV     R10, R13        ; rnd usa R13/R14: guardar
         MOV     R11, R14
@@ -116,10 +125,13 @@ ini:    MOV     R13, R10
         ; ---- capa de fondo: palabras de 16 bits
 base:   MOV     R0, R16         ; CH2: destino en 16 bpp
         AND     R0, #0xFF
-        MOV     PAGE2, R0
-        MOV     STEP2, #1
-        MOV     PAGE1, R25      ; CH1: los tiles en 16 bpp
-        MOV     STEP1, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE2, R0
+        MOV     MODE_PAGE1, R25      ; CH1: los tiles en 16 bpp
+        MOV     BANK, #1
+        MOV     DXI2, #1
+        MOV     DXI1, #1
+        MOV     BANK, #0
         LDI     R7, #8          ; palabras por fila de tile: 8 >> desplazamiento
         SHR     R7, R15
         MOV     R6, ZERO        ; fila de tiles
@@ -144,10 +156,10 @@ bcol:   MOV     R0, R5          ; tile = (col * 3 + fila * 5 + col / 4) & 7
         MUL     R1, R7
         ADD     R2, R1
 shd:    MOV     R8, ZERO        ; fila del tile
-trow:   MOV     IDXH1, #0
-        MOV     IDX1, R0
-        MOV     IDXH2, #0
-        MOV     IDX2, R2
+trow:   MOV     YI1, #0
+        MOV     XI1, R0
+        MOV     YI2, #0
+        MOV     XI2, R2
         MOV     LOOP_CNT, R7
         LDI     LOOP_TGT, #cp
 cp:     MOV     R1, DATA1
@@ -167,16 +179,22 @@ cp:     MOV     R1, DATA1
         JMP.NE  brow
         FLUSH   2
         ; ---- gemas con color clave, desplazadas (cuadro / 2) columnas
-        MOV     PAGE0, R16
-        MOV     STEP0, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE0, R16
+        MOV     BANK, #1
+        MOV     DXI0, #1
+        MOV     BANK, #0
         MOV     R0, R16
         AND     R0, #-256
         OR      R0, R25
-        MOV     PAGE3, R0       ; CH3: tiles en el formato del destino
-        MOV     STEP3, #1
-        MOV     PAGE1, R24      ; CH1: objetos
-        MOV     IDXH1, #0
-        MOV     IDX1, ZERO
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R0       ; CH3: tiles en el formato del destino
+        MOV     MODE_PAGE1, R24      ; CH1: objetos
+        MOV     BANK, #1
+        MOV     DXI3, #1
+        MOV     BANK, #0
+        MOV     YI1, #0
+        MOV     XI1, ZERO
         MOV     R15, R21        ; desplazamiento: (cuadro / 2) mod columnas
         SHR     R15, #1
 mod:    CMP     R15, R13
@@ -199,8 +217,8 @@ g3:     MOV     R4, R7          ; primer pixel del tile
         MOV     R2, R6
         MUL     R2, #8
         MOV     R8, ZERO
-grw:    MOV     IDXH3, #0
-        MOV     IDX3, R4
+grw:    MOV     YI3, #0
+        MOV     XI3, R4
         CALL    xy0
         LDI     R0, #8
         MOV     LOOP_CNT, R0

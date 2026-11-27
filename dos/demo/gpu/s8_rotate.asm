@@ -16,15 +16,18 @@
         .include "common.inc"
         .include "gen32.inc"
         .include "bgfill.inc"
-        MOV     PAGE1, R24
-        MOV     PAGE2, R24
-        MOV     STEP1, #1
-        MOV     STEP2, #1
+        MOV     BANK, #4
+        MOV     MODE_PAGE1, R24
+        MOV     MODE_PAGE2, R24
+        MOV     BANK, #1
+        MOV     DXI1, #1
+        MOV     DXI2, #1
+        MOV     BANK, #0
         MOV     R12, R31
         TST     R22, #1
         JMP.EQ  draw
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         MOV     R9, R20
 ini:    MOV     R13, R18
         CALL    rnd
@@ -51,12 +54,15 @@ draw:   MOV     R0, R16         ; CH3: el sprite (pagina P9 + 4)
         AND     R0, #-256
         OR      R0, R25
         ADD     R0, #4
-        MOV     PAGE3, R0
-        MOV     STEP3, #0
-        MOV     IDXH1, #0
-        MOV     IDX1, ZERO
-        MOV     IDXH2, #0
-        MOV     IDX2, ZERO
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R0
+        MOV     BANK, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
+        MOV     YI1, #0
+        MOV     XI1, ZERO
+        MOV     YI2, #0
+        MOV     XI2, ZERO
         LDI     R15, #23        ; media caja
         MOV     R9, R20
 spr:    MOV     R5, DATA1
@@ -80,18 +86,22 @@ spr:    MOV     R5, DATA1
         ADD     R0, R23
         ADD     R1, R23
         FLUSH   3
-        MOV     PAGE3, R26      ; (la tabla de senos, en la pagina de los datos)
-        MOV     IDXH3, #0
-        MOV     IDX3, R0
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R26      ; (la tabla de senos, en la pagina de los datos)
+        MOV     BANK, #0
+        MOV     YI3, #0
+        MOV     XI3, R0
         MOV     R10, DATA3      ; sin
-        MOV     IDXH3, #0
-        MOV     IDX3, R1
+        MOV     YI3, #0
+        MOV     XI3, R1
         MOV     R11, DATA3      ; cos
         MOV     R0, R16
         AND     R0, #-256
         OR      R0, R25
         ADD     R0, #4
-        MOV     PAGE3, R0       ; vuelve al sprite (con un acceso en medio)
+        MOV     BANK, #4
+        MOV     MODE_PAGE3, R0       ; vuelve al sprite (con un acceso en medio)
+        MOV     BANK, #0
         ; caja recortada: x de [cx-23, cx+23) dentro de [0, ancho)
         MOV     R1, R5
         SUB     R1, R15         ; x0
@@ -155,8 +165,8 @@ px:     MOV     R0, R13         ; u
         JMP.CS  skip
         MUL     R12, #32
         ADD     R12, R0
-        MOV     IDXH3, #0
-        MOV     IDX3, R12
+        MOV     YI3, #0
+        MOV     XI3, R12
         MOV     R0, DATA3 !f
         JMP.EQ  skip
         MOV     DATA0, R0

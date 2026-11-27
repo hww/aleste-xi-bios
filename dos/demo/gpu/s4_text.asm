@@ -22,10 +22,13 @@
         AND     R13, #0xFF
 b4:     LDI     R0, #0x0400     ; CH1: la fuente, 1 bpp (pagina P11)
         OR      R0, R27
-        MOV     PAGE1, R0
-        MOV     STEP1, #1
-        MOV     PAGE3, R26      ; CH3: tabla de colores
-        MOV     STEP3, #0
+        MOV     BANK, #4
+        MOV     MODE_PAGE1, R0
+        MOV     MODE_PAGE3, R26      ; CH3: tabla de colores
+        MOV     BANK, #1
+        MOV     DXI1, #1
+        MOV     DXI3, #0
+        MOV     BANK, #0
         MOV     R5, ZERO        ; x
         LDI     R6, #8          ; y
         MOV     R15, ZERO       ; desplazamiento de la capa
@@ -41,12 +44,12 @@ c1:     MOV     R7, R12
         MOV     R0, R12         ; tinta de la tabla
         AND     R0, #15
         ADD     R0, R30
-        MOV     IDXH3, #0
-        MOV     IDX3, R0
+        MOV     YI3, #0
+        MOV     XI3, R0
         MOV     R4, DATA3
         MOV     R8, ZERO        ; fila
-grow:   MOV     IDXH1, #0       ; fuente: glifo + fila
-        MOV     IDX1, R7
+grow:   MOV     YI1, #0       ; fuente: glifo + fila
+        MOV     XI1, R7
         MOV     R1, R5
         MOV     R2, R6
         ADD     R2, R8

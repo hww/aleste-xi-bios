@@ -21,6 +21,17 @@
 #include "pk_s9_scale.h"
 #include "pk_s10_shift.h"
 #include "pk_conv.h"
+PK_FITS(pk_s1_fill, PK_SCENE_W);
+PK_FITS(pk_s2_lines, PK_SCENE_W);
+PK_FITS(pk_s3_rects, PK_SCENE_W);
+PK_FITS(pk_s4_text, PK_SCENE_W);
+PK_FITS(pk_s5_sprites, PK_SCENE_W);
+PK_FITS(pk_s6_tiles, PK_SCENE_W);
+PK_FITS(pk_s7_parallax, PK_SCENE_W);
+PK_FITS(pk_s8_rotate, PK_SCENE_W);
+PK_FITS(pk_s9_scale, PK_SCENE_W);
+PK_FITS(pk_s10_shift, PK_SCENE_W);
+PK_FITS(pk_conv, PK_SCENE_W);
 
 static uint8_t cur;
 static uint16_t tbl[17];                /* tablas pequenas para la GPU (alineadas) */
