@@ -4,6 +4,11 @@
 ;
 ; Sin DMA: los bytes del sector se recogen sondeando el registro de estado
 ; (RQM, DIO y EXM). Discos de 720 KB (80 pistas, 2 caras, 9 sectores de 512).
+; La fase de ejecucion va con las interrupciones cerradas: a 250 kbit/s hay
+; un byte cada 32 us y una rutina de interrupcion mas larga lo perderia
+; (overrun). Tras cada sector se llama a __timer_get_ms (unos us, en el hueco
+; entre sectores) para que el reloj no pierda vueltas de RT en lecturas de
+; varios sectores.
 ; =============================================================================
 
 module fdc_765
@@ -17,6 +22,8 @@ defc FDC_MOTOR      = 0x02
 defc MSR_RQM = 7
 defc MSR_DIO = 6
 defc MSR_EXM = 5
+
+EXTERN __timer_get_ms
 
 SECTION DRV_CODE
 
@@ -237,9 +244,20 @@ rd_ontrack:
     call nc, cmd_out            ; GPL
     ld a, 0xFF
     call nc, cmd_out            ; DTL
-    jr c, rd_timeout
+    jp c, rd_timeout
     ; ---- ejecucion: un byte cada vez que RQM = 1 con EXM = 1
+    ld a, i                     ; cierra las INT; dos veces: LD A,I da P/V = 0
+    jp pe, rd_ion               ; si entra una INT mientras se ejecuta
+    ld a, i
+rd_ion:
+    di
+    ld a, 0
+    jp po, rd_ioff
+    inc a
+rd_ioff:
+    ld (r_iff), a
     ld hl, (r_buf)
+    ld bc, 512                  ; bytes hasta el final del sector
     ld a, 16
     ld (r_to), a                ; espera maxima: 16 x 65536 vueltas (mas de 1 s)
     ld de, 0
@@ -253,14 +271,21 @@ rd_exec:
     jr z, rd_put                ; el 765 pide un byte: escritura
     in a, (FDC_DATA)
     ld (hl), a
-    inc hl
-    ld de, 0
-    jr rd_exec
+    jr rd_next
 rd_put:
     ld a, (hl)
     out (FDC_DATA), a
+rd_next:
     inc hl
     ld de, 0
+    dec bc
+    ld a, b
+    or c
+    jr nz, rd_exec
+    push hl                     ; fin de sector: el reloj, en el hueco
+    call __timer_get_ms         ; (conserva BC y DE)
+    pop hl
+    ld bc, 512
     jr rd_exec
 rd_noreq:
     bit MSR_EXM, a
@@ -280,6 +305,7 @@ rd_wait:
     jr rd_timeout
     ; ---- 7 bytes de resultado: ST0 ST1 ST2 C H R N
 rd_result:
+    call irq_rest
     call res_in
     jr c, rd_timeout
     ld (r_st), a
@@ -305,7 +331,18 @@ rd_rest:
     or b
     ret
 rd_timeout:
+    call irq_rest
     ld a, 0x80
+    ret
+
+; ---- abre las interrupciones si estaban abiertas al empezar la ejecucion
+irq_rest:
+    ld a, (r_iff)
+    or a
+    ret z
+    xor a
+    ld (r_iff), a
+    ei
     ret
 
 SECTION DRV_DATA
@@ -328,3 +365,4 @@ r_cmd:   db 0x46
 r_buf:   dw 0
 r_st:    ds 3
 r_to:    db 0
+r_iff:   db 0
